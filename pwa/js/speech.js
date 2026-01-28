@@ -13,94 +13,130 @@ export class SpeechEngine {
     this.supported = true;
     this.recognition = new SpeechRecognition();
     this.recognition.lang = 'ja-JP';
-    this.recognition.continuous = true;
+    this.recognition.continuous = false; // モバイル互換のため false
     this.recognition.interimResults = true;
 
     this.isListening = false;
     this.wakeWord = localStorage.getItem('wake_word') || 'ヘイエージェント';
+
+    // directMode: true = マイクボタン押下で即コマンド受付
+    //             false = ウェイクワード待ち受け
+    this.directMode = true;
     this.isWaitingForCommand = false;
     this.commandTimeout = null;
+    this._lastFinal = '';
 
     // コールバック
-    this.onWakeWord = null;       // ウェイクワード検出時
-    this.onCommand = null;        // コマンド確定時
-    this.onInterim = null;        // 中間結果
-    this.onStateChange = null;    // 状態変化
+    this.onWakeWord = null;
+    this.onCommand = null;
+    this.onInterim = null;
+    this.onStateChange = null;
 
     this._setupRecognition();
   }
 
-  // ウェイクワードを更新
   setWakeWord(word) {
     this.wakeWord = word;
     localStorage.setItem('wake_word', word);
   }
 
-  // 音声認識を開始
-  start() {
-    if (!this.supported || this.isListening) return;
+  // ダイレクトモードで開始（ボタン押下 → 即コマンド受付）
+  startDirect() {
+    this.directMode = true;
+    this._lastFinal = '';
+    this._start();
+    this.onStateChange?.('activated');
+  }
+
+  // ウェイクワードモードで開始（常時待ち受け）
+  startWakeWord() {
+    this.directMode = false;
+    this.isWaitingForCommand = false;
+    this._lastFinal = '';
+    this._start();
+    this.onStateChange?.('listening');
+  }
+
+  stop() {
+    if (!this.isListening) return;
+    this.isListening = false;
+    this.isWaitingForCommand = false;
+    clearTimeout(this.commandTimeout);
+    try { this.recognition.stop(); } catch (e) { /* ignore */ }
+    this.onStateChange?.('idle');
+  }
+
+  // 内部: 認識を開始
+  _start() {
+    if (!this.supported) return;
+    if (this.isListening) {
+      try { this.recognition.stop(); } catch (e) { /* ignore */ }
+    }
     try {
       this.recognition.start();
       this.isListening = true;
-      this.isWaitingForCommand = false;
-      this.onStateChange?.('listening');
     } catch (e) {
       console.error('音声認識の開始に失敗:', e);
     }
   }
 
-  // 音声認識を停止
-  stop() {
-    if (!this.isListening) return;
-    this.recognition.stop();
-    this.isListening = false;
-    this.isWaitingForCommand = false;
-    clearTimeout(this.commandTimeout);
-    this.onStateChange?.('idle');
-  }
-
-  // 内部: 認識エンジンのセットアップ
   _setupRecognition() {
     this.recognition.onresult = (event) => {
-      let finalTranscript = '';
       let interimTranscript = '';
+      let finalTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript;
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
         } else {
-          interimTranscript += result[0].transcript;
+          interimTranscript += transcript;
         }
       }
 
-      // 中間結果を通知
+      // 中間結果を画面に表示
       if (interimTranscript) {
         this.onInterim?.(interimTranscript);
-        this._checkForWakeWord(interimTranscript);
       }
 
       // 確定結果を処理
       if (finalTranscript) {
+        this._lastFinal = finalTranscript;
         this.onInterim?.(finalTranscript);
-        this._processTranscript(finalTranscript);
+
+        if (this.directMode) {
+          // ダイレクトモード: 確定テキストをそのままコマンドとして送信
+          this._deliverCommand(finalTranscript);
+        } else {
+          // ウェイクワードモード
+          this._processWithWakeWord(finalTranscript);
+        }
       }
     };
 
     this.recognition.onerror = (event) => {
       console.warn('音声認識エラー:', event.error);
-      // "no-speech" や "aborted" は無視して再起動
-      if (event.error === 'no-speech' || event.error === 'aborted') {
-        if (this.isListening) {
+      if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network') {
+        if (this.isListening && !this.directMode) {
           this._restart();
         }
       }
     };
 
     this.recognition.onend = () => {
-      // 自動再起動（リスニング中の場合）
       if (this.isListening) {
-        this._restart();
+        if (this.directMode) {
+          // ダイレクトモード: 認識終了で最後のテキストを送信
+          if (this._lastFinal) {
+            // onresultで既に送信済み
+          }
+          // 停止状態に戻す
+          this.isListening = false;
+          this.onStateChange?.('idle');
+        } else {
+          // ウェイクワードモード: 再起動して常時待ち受け
+          this._restart();
+        }
       }
     };
   }
@@ -110,43 +146,26 @@ export class SpeechEngine {
       if (this.isListening) {
         try {
           this.recognition.start();
-        } catch (e) {
-          // already started の場合は無視
-        }
+        } catch (e) { /* ignore */ }
       }
     }, 300);
   }
 
-  _checkForWakeWord(text) {
-    if (this.isWaitingForCommand) return;
-
+  _processWithWakeWord(text) {
     const lower = text.toLowerCase();
     const wakeWordLower = this.wakeWord.toLowerCase();
 
-    if (lower.includes(wakeWordLower) ||
-        lower.includes('ヘイエージェント') ||
-        lower.includes('hey agent')) {
-      this.isWaitingForCommand = true;
-      this.onWakeWord?.();
-      this.onStateChange?.('activated');
-      this._startCommandTimeout();
-    }
-  }
-
-  _processTranscript(text) {
-    const lower = text.toLowerCase();
-    const wakeWordLower = this.wakeWord.toLowerCase();
+    const hasWakeWord = lower.includes(wakeWordLower) ||
+                        lower.includes('ヘイエージェント') ||
+                        lower.includes('hey agent');
 
     if (!this.isWaitingForCommand) {
-      // ウェイクワードを探す
-      if (lower.includes(wakeWordLower) ||
-          lower.includes('ヘイエージェント') ||
-          lower.includes('hey agent')) {
+      if (hasWakeWord) {
         this.isWaitingForCommand = true;
         this.onWakeWord?.();
         this.onStateChange?.('activated');
 
-        // ウェイクワード以降のテキストをコマンドとして抽出
+        // ウェイクワード後のテキストがあればコマンドとして処理
         const idx = lower.indexOf(wakeWordLower);
         if (idx >= 0) {
           const after = text.substring(idx + this.wakeWord.length).trim();
@@ -158,13 +177,13 @@ export class SpeechEngine {
         this._startCommandTimeout();
       }
     } else {
-      // コマンド待ち中 → テキストをコマンドとして送信
-      const idx = lower.indexOf(wakeWordLower);
+      // コマンド待ち中
       let command = text;
+      const idx = lower.indexOf(wakeWordLower);
       if (idx >= 0) {
         command = text.substring(idx + this.wakeWord.length).trim();
       }
-      if (command.length > 2) {
+      if (command.length > 1) {
         this._deliverCommand(command);
       }
     }
@@ -173,7 +192,7 @@ export class SpeechEngine {
   _deliverCommand(command) {
     clearTimeout(this.commandTimeout);
     this.isWaitingForCommand = false;
-    this.onCommand?.(command);
+    this.onCommand?.(command.trim());
   }
 
   _startCommandTimeout() {
@@ -197,7 +216,6 @@ export function speak(text) {
   utterance.lang = 'ja-JP';
   utterance.rate = 1.0;
 
-  // 日本語音声を優先選択
   const voices = window.speechSynthesis.getVoices();
   const jaVoice = voices.find(v => v.lang.startsWith('ja'));
   if (jaVoice) utterance.voice = jaVoice;

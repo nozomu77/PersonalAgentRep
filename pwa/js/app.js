@@ -151,9 +151,10 @@ function toggleListening() {
     dom.btnMic.classList.remove('recording');
     dom.micIcon.textContent = '🎙️';
   } else {
-    speech.start();
+    // ダイレクトモード: ボタン押したら即コマンド受付
+    speech.startDirect();
     isListening = true;
-    setAgentState('listening');
+    setAgentState('activated');
     dom.btnMic.classList.add('recording');
     dom.micIcon.textContent = '⏹️';
   }
@@ -198,13 +199,12 @@ async function processCommand(text) {
     });
   }
 
-  // 3秒後にリスニング状態に戻る
+  // 3秒後にアイドル状態に戻す（マイクボタンも戻す）
   setTimeout(() => {
-    if (isListening) {
-      setAgentState('listening');
-    } else {
-      setAgentState('idle');
-    }
+    isListening = false;
+    dom.btnMic.classList.remove('recording');
+    dom.micIcon.textContent = '🎙️';
+    setAgentState('idle');
   }, 3000);
 }
 
