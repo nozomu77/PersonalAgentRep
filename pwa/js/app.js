@@ -56,6 +56,13 @@ const dom = {
 
   // History
   historyList: $('#history-list'),
+
+  // Confirm Dialog
+  confirmOverlay: $('#confirm-overlay'),
+  confirmTitle: $('#confirm-title'),
+  confirmBody: $('#confirm-body'),
+  btnConfirmOk: $('#btn-confirm-ok'),
+  btnConfirmCancel: $('#btn-confirm-cancel'),
 };
 
 // ============================================
@@ -170,21 +177,41 @@ function sendManualCommand() {
 async function processCommand(text) {
   setAgentState('processing');
   dom.transcription.textContent = text;
-  showResponse('処理中...');
+  showResponse('解析中...');
 
   try {
     // 意図解析
     const intent = await parseIntent(text);
 
+    // 読み取り系は確認不要、書き込み系は確認を挟む
+    const needsConfirm = [
+      IntentType.SEND_EMAIL,
+      IntentType.CREATE_EVENT,
+      IntentType.CREATE_TASK,
+      IntentType.SET_REMINDER,
+    ].includes(intent.type);
+
+    if (needsConfirm) {
+      // 確認ダイアログを表示して待つ
+      const summary = buildConfirmSummary(intent, text);
+      showResponse(summary.message);
+      const confirmed = await showConfirmDialog(summary.title, summary.body);
+
+      if (!confirmed) {
+        showResponse('キャンセルしました');
+        resetToIdle();
+        return;
+      }
+    }
+
     // コマンド実行
+    showResponse('実行中...');
     const result = await executeIntent(intent, text);
 
     // 結果表示
     showResponse(result.response);
     setAgentState('responding');
     speak(result.response);
-
-    // 履歴に追加
     addHistory(result);
   } catch (e) {
     const errorMsg = `エラー: ${e.message}`;
@@ -199,13 +226,83 @@ async function processCommand(text) {
     });
   }
 
-  // 3秒後にアイドル状態に戻す（マイクボタンも戻す）
-  setTimeout(() => {
-    isListening = false;
-    dom.btnMic.classList.remove('recording');
-    dom.micIcon.textContent = '🎙️';
-    setAgentState('idle');
-  }, 3000);
+  // 3秒後にアイドル状態に戻す
+  setTimeout(resetToIdle, 3000);
+}
+
+function resetToIdle() {
+  isListening = false;
+  dom.btnMic.classList.remove('recording');
+  dom.micIcon.textContent = '🎙️';
+  setAgentState('idle');
+}
+
+// ============================================
+// 確認ダイアログ
+// ============================================
+
+function buildConfirmSummary(intent, rawText) {
+  const p = intent.params || {};
+  const dateName = { today: '今日', tomorrow: '明日', day_after_tomorrow: '明後日' };
+
+  switch (intent.type) {
+    case IntentType.SEND_EMAIL:
+      return {
+        title: 'メール送信',
+        message: `メール送信: ${p.to || '(宛先未指定)'} / 件名: ${p.subject || '(なし)'}`,
+        body: `
+          <div class="confirm-row"><span class="confirm-label">宛先</span><span>${p.to || '(未指定)'}</span></div>
+          <div class="confirm-row"><span class="confirm-label">件名</span><span>${p.subject || '(なし)'}</span></div>
+          <div class="confirm-row"><span class="confirm-label">本文</span><span>${p.body || '(なし)'}</span></div>`,
+      };
+    case IntentType.CREATE_EVENT:
+      return {
+        title: '予定を作成',
+        message: `予定作成: ${p.title || rawText} / ${dateName[p.date] || p.date || '今日'} ${p.time || '09:00'}`,
+        body: `
+          <div class="confirm-row"><span class="confirm-label">タイトル</span><span>${p.title || rawText}</span></div>
+          <div class="confirm-row"><span class="confirm-label">日付</span><span>${dateName[p.date] || p.date || '今日'}</span></div>
+          <div class="confirm-row"><span class="confirm-label">時間</span><span>${p.time || '09:00 (デフォルト)'}</span></div>`,
+      };
+    case IntentType.CREATE_TASK:
+      return {
+        title: 'タスクを作成',
+        message: `タスク作成: ${p.title || rawText}`,
+        body: `
+          <div class="confirm-row"><span class="confirm-label">タスク名</span><span>${p.title || rawText}</span></div>
+          <div class="confirm-row"><span class="confirm-label">メモ</span><span>${p.notes || '(なし)'}</span></div>`,
+      };
+    case IntentType.SET_REMINDER:
+      return {
+        title: 'リマインダーを作成',
+        message: `リマインダー: ${p.title || rawText}`,
+        body: `
+          <div class="confirm-row"><span class="confirm-label">内容</span><span>${p.title || rawText}</span></div>
+          <div class="confirm-row"><span class="confirm-label">日付</span><span>${dateName[p.date] || p.date || '(未指定)'}</span></div>`,
+      };
+    default:
+      return { title: '実行確認', message: rawText, body: `<p>${rawText}</p>` };
+  }
+}
+
+function showConfirmDialog(title, bodyHtml) {
+  return new Promise((resolve) => {
+    dom.confirmTitle.textContent = title;
+    dom.confirmBody.innerHTML = bodyHtml;
+    dom.confirmOverlay.classList.remove('hidden');
+
+    const cleanup = () => {
+      dom.confirmOverlay.classList.add('hidden');
+      dom.btnConfirmOk.removeEventListener('click', onOk);
+      dom.btnConfirmCancel.removeEventListener('click', onCancel);
+    };
+
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
+
+    dom.btnConfirmOk.addEventListener('click', onOk);
+    dom.btnConfirmCancel.addEventListener('click', onCancel);
+  });
 }
 
 async function executeIntent(intent, rawText) {
