@@ -54,7 +54,7 @@
    - Google Calendar API
    - Google Tasks API
 3. OAuth 2.0 クライアントIDを作成（iOSアプリケーション）
-4. バンドルIDに `com.yourname.iPhoneAIAgent` を設定
+4. バンドルIDに `com.nozomu77.iPhoneAIAgent` を設定
 
 ### 2. OpenAI API キー（オプション）
 
