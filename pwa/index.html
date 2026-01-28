@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#3b82f6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AI Agent">
+  <title>AI Agent</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ヘッダー -->
+    <header id="header">
+      <h1>AI Agent</h1>
+      <div id="status-bar">
+        <span id="google-status" class="status-dot disconnected"></span>
+        <span id="google-status-text">未接続</span>
+      </div>
+    </header>
+
+    <!-- タブナビゲーション -->
+    <nav id="tabs">
+      <button class="tab active" data-tab="home">
+        <span class="tab-icon">🎤</span>
+        <span class="tab-label">エージェント</span>
+      </button>
+      <button class="tab" data-tab="history">
+        <span class="tab-icon">📋</span>
+        <span class="tab-label">履歴</span>
+      </button>
+      <button class="tab" data-tab="settings">
+        <span class="tab-icon">⚙️</span>
+        <span class="tab-label">設定</span>
+      </button>
+    </nav>
+
+    <!-- ホーム画面 -->
+    <main id="page-home" class="page active">
+      <div class="home-content">
+        <div id="agent-icon-area">
+          <div id="agent-icon">🎤</div>
+          <div id="pulse-ring"></div>
+        </div>
+        <p id="state-message">タップして開始</p>
+
+        <!-- 波形 -->
+        <canvas id="wave-canvas" width="320" height="60"></canvas>
+
+        <!-- 認識テキスト -->
+        <div id="transcription-area">
+          <p id="transcription"></p>
+        </div>
+
+        <!-- レスポンス -->
+        <div id="response-area" class="hidden">
+          <p id="response-text"></p>
+        </div>
+
+        <!-- コントロール -->
+        <div id="controls">
+          <button id="btn-keyboard" class="control-btn secondary" title="テキスト入力">⌨️</button>
+          <button id="btn-mic" class="control-btn primary">
+            <span id="mic-icon">🎙️</span>
+          </button>
+          <div class="control-btn placeholder"></div>
+        </div>
+
+        <!-- テキスト入力 -->
+        <div id="manual-input" class="hidden">
+          <input type="text" id="input-command" placeholder="コマンドを入力...">
+          <button id="btn-send">送信</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- 履歴画面 -->
+    <main id="page-history" class="page">
+      <div class="page-header">
+        <h2>コマンド履歴</h2>
+      </div>
+      <div id="history-list">
+        <div class="empty-state">
+          <p class="empty-icon">📋</p>
+          <p>まだコマンド履歴がありません</p>
+          <p class="empty-sub">音声またはテキストでコマンドを実行すると<br>ここに履歴が表示されます</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- 設定画面 -->
+    <main id="page-settings" class="page">
+      <div class="page-header">
+        <h2>設定</h2>
+      </div>
+      <div class="settings-content">
+        <!-- Google アカウント -->
+        <section class="settings-section">
+          <h3>Google アカウント</h3>
+          <div id="auth-status">
+            <p id="auth-message">未ログイン</p>
+          </div>
+          <button id="btn-google-auth" class="settings-btn primary">Googleアカウントでログイン</button>
+          <p class="settings-note">Gmail、Googleカレンダー、Google Tasksへのアクセスに必要です</p>
+        </section>
+
+        <!-- ウェイクワード -->
+        <section class="settings-section">
+          <h3>ウェイクワード</h3>
+          <input type="text" id="input-wakeword" value="ヘイエージェント" class="settings-input">
+          <p class="settings-note">この言葉を話すとエージェントが起動します</p>
+        </section>
+
+        <!-- OpenAI API -->
+        <section class="settings-section">
+          <h3>OpenAI API キー（オプション）</h3>
+          <div class="input-group">
+            <input type="password" id="input-openai-key" placeholder="sk-..." class="settings-input">
+            <button id="btn-toggle-key" class="icon-btn">👁️</button>
+          </div>
+          <button id="btn-save-key" class="settings-btn">保存</button>
+          <p class="settings-note">設定すると高度な自然言語理解が利用できます。未設定でもルールベースで動作します。</p>
+        </section>
+
+        <!-- 対応コマンド -->
+        <section class="settings-section">
+          <h3>対応コマンド</h3>
+          <table class="command-table">
+            <tr><td class="cmd-type">メール送信</td><td>「〜にメールして」</td></tr>
+            <tr><td class="cmd-type">メール確認</td><td>「未読メールを確認して」</td></tr>
+            <tr><td class="cmd-type">予定作成</td><td>「明日の10時に会議を入れて」</td></tr>
+            <tr><td class="cmd-type">予定確認</td><td>「今日の予定を教えて」</td></tr>
+            <tr><td class="cmd-type">タスク作成</td><td>「〜をリマインドして」</td></tr>
+            <tr><td class="cmd-type">タスク一覧</td><td>「タスクを確認して」</td></tr>
+          </table>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
