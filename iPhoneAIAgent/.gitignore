@@ -1,0 +1,23 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserdata
+*.xcworkspace
+xcuserdata/
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# CocoaPods
+Pods/
+
+# OS files
+.DS_Store
+*.swp
+*~
+
+# Secrets (never commit these)
+# GoogleConfig.swift contains placeholder values - replace with real credentials locally
