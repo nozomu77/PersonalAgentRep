@@ -1,0 +1,500 @@
+// ============================================
+// AI Agent PWA - メインアプリケーション
+// ============================================
+
+import { SpeechEngine, speak } from './speech.js';
+import { parseIntent, getIntentLabel, IntentType } from './agent.js';
+import { initAuth, setupTokenClient, signIn, signOut, isAuthenticated } from './auth.js';
+import { Gmail, Calendar, Tasks } from './google-services.js';
+
+// ============================================
+// 状態管理
+// ============================================
+
+const state = {
+  currentPage: 'home',
+  agentState: 'idle', // idle | listening | activated | processing | responding
+  history: JSON.parse(localStorage.getItem('command_history') || '[]'),
+  clientId: localStorage.getItem('google_client_id') || '',
+};
+
+// ============================================
+// DOM要素
+// ============================================
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+const dom = {
+  // Header
+  googleStatus: $('#google-status'),
+  googleStatusText: $('#google-status-text'),
+
+  // Home
+  agentIcon: $('#agent-icon'),
+  stateMessage: $('#state-message'),
+  waveCanvas: $('#wave-canvas'),
+  transcription: $('#transcription'),
+  responseArea: $('#response-area'),
+  responseText: $('#response-text'),
+  btnMic: $('#btn-mic'),
+  micIcon: $('#mic-icon'),
+  btnKeyboard: $('#btn-keyboard'),
+  manualInput: $('#manual-input'),
+  inputCommand: $('#input-command'),
+  btnSend: $('#btn-send'),
+
+  // Settings
+  btnGoogleAuth: $('#btn-google-auth'),
+  authMessage: $('#auth-message'),
+  inputWakeword: $('#input-wakeword'),
+  inputOpenAIKey: $('#input-openai-key'),
+  btnToggleKey: $('#btn-toggle-key'),
+  btnSaveKey: $('#btn-save-key'),
+
+  // History
+  historyList: $('#history-list'),
+};
+
+// ============================================
+// 音声認識エンジン
+// ============================================
+
+const speech = new SpeechEngine();
+let isListening = false;
+let waveAnimId = null;
+
+// ============================================
+// 初期化
+// ============================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  initTabs();
+  initHome();
+  initSettings();
+  initAuthModule();
+  renderHistory();
+  drawWave(false);
+
+  // Web Speech API 非対応チェック
+  if (!speech.supported) {
+    dom.stateMessage.textContent = 'このブラウザは音声認識に非対応です (Chromeを推奨)';
+  }
+});
+
+// ============================================
+// タブ切り替え
+// ============================================
+
+function initTabs() {
+  $$('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.tab;
+      $$('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      $$('.page').forEach(p => p.classList.remove('active'));
+      $(`#page-${target}`).classList.add('active');
+      state.currentPage = target;
+    });
+  });
+}
+
+// ============================================
+// ホーム画面
+// ============================================
+
+function initHome() {
+  // マイクボタン
+  dom.btnMic.addEventListener('click', toggleListening);
+
+  // キーボードボタン
+  dom.btnKeyboard.addEventListener('click', () => {
+    dom.manualInput.classList.toggle('hidden');
+    if (!dom.manualInput.classList.contains('hidden')) {
+      dom.inputCommand.focus();
+    }
+  });
+
+  // テキスト送信
+  dom.btnSend.addEventListener('click', sendManualCommand);
+  dom.inputCommand.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendManualCommand();
+  });
+
+  // 音声認識コールバック
+  speech.onWakeWord = () => {
+    setAgentState('activated');
+    showResponse('はい、何をしますか？');
+    speak('はい、何をしますか？');
+  };
+
+  speech.onCommand = (command) => {
+    processCommand(command);
+  };
+
+  speech.onInterim = (text) => {
+    dom.transcription.textContent = text;
+  };
+
+  speech.onStateChange = (newState) => {
+    setAgentState(newState);
+  };
+}
+
+function toggleListening() {
+  if (isListening) {
+    speech.stop();
+    isListening = false;
+    setAgentState('idle');
+    dom.btnMic.classList.remove('recording');
+    dom.micIcon.textContent = '🎙️';
+  } else {
+    speech.start();
+    isListening = true;
+    setAgentState('listening');
+    dom.btnMic.classList.add('recording');
+    dom.micIcon.textContent = '⏹️';
+  }
+}
+
+function sendManualCommand() {
+  const text = dom.inputCommand.value.trim();
+  if (!text) return;
+  dom.inputCommand.value = '';
+  processCommand(text);
+}
+
+async function processCommand(text) {
+  setAgentState('processing');
+  dom.transcription.textContent = text;
+  showResponse('処理中...');
+
+  try {
+    // 意図解析
+    const intent = await parseIntent(text);
+
+    // コマンド実行
+    const result = await executeIntent(intent, text);
+
+    // 結果表示
+    showResponse(result.response);
+    setAgentState('responding');
+    speak(result.response);
+
+    // 履歴に追加
+    addHistory(result);
+  } catch (e) {
+    const errorMsg = `エラー: ${e.message}`;
+    showResponse(errorMsg);
+    setAgentState('responding');
+    addHistory({
+      type: IntentType.UNKNOWN,
+      rawText: text,
+      response: errorMsg,
+      success: false,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // 3秒後にリスニング状態に戻る
+  setTimeout(() => {
+    if (isListening) {
+      setAgentState('listening');
+    } else {
+      setAgentState('idle');
+    }
+  }, 3000);
+}
+
+async function executeIntent(intent, rawText) {
+  if (!isAuthenticated()) {
+    return {
+      type: intent.type,
+      rawText,
+      response: 'Googleアカウントにログインしてください（設定タブから）',
+      success: false,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  let response;
+
+  try {
+    switch (intent.type) {
+      case IntentType.SEND_EMAIL:
+        response = await Gmail.sendEmail(
+          intent.params.to || '',
+          intent.params.subject || '',
+          intent.params.body || ''
+        );
+        break;
+
+      case IntentType.CHECK_EMAIL:
+        response = await Gmail.getUnreadEmails();
+        break;
+
+      case IntentType.CREATE_EVENT:
+        response = await Calendar.createEvent(
+          intent.params.title || rawText,
+          intent.params.date || '',
+          intent.params.time || ''
+        );
+        break;
+
+      case IntentType.CHECK_SCHEDULE:
+        response = await Calendar.getEvents(intent.params.date || 'today');
+        break;
+
+      case IntentType.CREATE_TASK:
+        response = await Tasks.createTask(
+          intent.params.title || rawText,
+          intent.params.notes || ''
+        );
+        break;
+
+      case IntentType.LIST_TASKS:
+        response = await Tasks.getTasks();
+        break;
+
+      case IntentType.SET_REMINDER:
+        response = await Tasks.createTask(
+          intent.params.title || rawText,
+          'リマインダー',
+          intent.params.date || null
+        );
+        break;
+
+      default:
+        response = `「${rawText}」を理解できませんでした。もう一度お試しください。`;
+        return { type: intent.type, rawText, response, success: false, timestamp: new Date().toISOString() };
+    }
+
+    return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+  } catch (e) {
+    return { type: intent.type, rawText, response: `エラー: ${e.message}`, success: false, timestamp: new Date().toISOString() };
+  }
+}
+
+// ============================================
+// 状態管理 & UI更新
+// ============================================
+
+function setAgentState(newState) {
+  state.agentState = newState;
+
+  // CSSクラスで状態を反映
+  document.body.className = `state-${newState}`;
+
+  // アイコン更新
+  const icons = {
+    idle: '🎤', listening: '🎤', activated: '👂',
+    processing: '🧠', responding: '🔊',
+  };
+  dom.agentIcon.textContent = icons[newState] || '🎤';
+
+  // メッセージ更新
+  const wakeWord = localStorage.getItem('wake_word') || 'ヘイエージェント';
+  const messages = {
+    idle: 'タップして開始',
+    listening: `「${wakeWord}」と話しかけてください`,
+    activated: 'コマンドをどうぞ',
+    processing: '処理中...',
+    responding: '応答中',
+  };
+  dom.stateMessage.textContent = messages[newState] || '';
+
+  // 波形描画
+  drawWave(newState === 'listening' || newState === 'activated');
+}
+
+function showResponse(text) {
+  dom.responseArea.classList.remove('hidden');
+  dom.responseText.textContent = text;
+}
+
+// ============================================
+// 波形描画
+// ============================================
+
+function drawWave(active) {
+  cancelAnimationFrame(waveAnimId);
+
+  const canvas = dom.waveCanvas;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  let phase = 0;
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const midY = H / 2;
+
+    if (active) {
+      for (let wave = 0; wave < 3; wave++) {
+        const alpha = 1.0 - wave * 0.3;
+        const amp = (H / 4) * (1 - wave * 0.2);
+        const freq = 2 + wave * 0.5;
+
+        ctx.beginPath();
+        ctx.moveTo(0, midY);
+        for (let x = 0; x <= W; x += 2) {
+          const relX = x / W;
+          const envelope = Math.sin(Math.PI * relX);
+          const y = midY + Math.sin(relX * Math.PI * 2 * freq + phase + wave * 0.5) * amp * envelope;
+          ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = `rgba(96, 165, 250, ${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      phase += 0.05;
+      waveAnimId = requestAnimationFrame(draw);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, midY);
+      ctx.lineTo(W, midY);
+      ctx.strokeStyle = 'rgba(100, 116, 139, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
+  draw();
+}
+
+// ============================================
+// 設定画面
+// ============================================
+
+function initSettings() {
+  // Google認証ボタン
+  dom.btnGoogleAuth.addEventListener('click', () => {
+    if (isAuthenticated()) {
+      signOut();
+    } else {
+      // Client IDが未設定なら入力を促す
+      if (!state.clientId) {
+        const id = prompt('Google Cloud ConsoleのクライアントIDを入力してください:');
+        if (!id) return;
+        state.clientId = id;
+        localStorage.setItem('google_client_id', id);
+        setupTokenClient(id);
+        // 少し待ってからサインイン
+        setTimeout(() => signIn(), 500);
+      } else {
+        signIn();
+      }
+    }
+  });
+
+  // ウェイクワード
+  dom.inputWakeword.value = localStorage.getItem('wake_word') || 'ヘイエージェント';
+  dom.inputWakeword.addEventListener('change', () => {
+    speech.setWakeWord(dom.inputWakeword.value);
+  });
+
+  // OpenAI キー
+  dom.inputOpenAIKey.value = localStorage.getItem('openai_api_key') || '';
+  dom.btnToggleKey.addEventListener('click', () => {
+    const input = dom.inputOpenAIKey;
+    input.type = input.type === 'password' ? 'text' : 'password';
+  });
+  dom.btnSaveKey.addEventListener('click', () => {
+    localStorage.setItem('openai_api_key', dom.inputOpenAIKey.value);
+    alert('APIキーを保存しました');
+  });
+}
+
+// ============================================
+// 認証モジュール初期化
+// ============================================
+
+function initAuthModule() {
+  initAuth((authenticated) => {
+    updateAuthUI(authenticated);
+  });
+
+  if (state.clientId) {
+    setupTokenClient(state.clientId);
+  }
+
+  // 現在の認証状態を反映
+  updateAuthUI(isAuthenticated());
+}
+
+function updateAuthUI(authenticated) {
+  if (authenticated) {
+    dom.googleStatus.classList.add('connected');
+    dom.googleStatus.classList.remove('disconnected');
+    dom.googleStatusText.textContent = '接続中';
+    dom.authMessage.textContent = 'ログイン済み';
+    dom.btnGoogleAuth.textContent = 'ログアウト';
+    dom.btnGoogleAuth.classList.remove('primary');
+    dom.btnGoogleAuth.classList.add('danger');
+  } else {
+    dom.googleStatus.classList.remove('connected');
+    dom.googleStatus.classList.add('disconnected');
+    dom.googleStatusText.textContent = '未接続';
+    dom.authMessage.textContent = '未ログイン';
+    dom.btnGoogleAuth.textContent = 'Googleアカウントでログイン';
+    dom.btnGoogleAuth.classList.add('primary');
+    dom.btnGoogleAuth.classList.remove('danger');
+  }
+}
+
+// ============================================
+// 履歴管理
+// ============================================
+
+function addHistory(result) {
+  state.history.unshift(result);
+  if (state.history.length > 50) state.history.pop();
+  localStorage.setItem('command_history', JSON.stringify(state.history));
+  renderHistory();
+}
+
+function renderHistory() {
+  if (state.history.length === 0) {
+    dom.historyList.innerHTML = `
+      <div class="empty-state">
+        <p class="empty-icon">📋</p>
+        <p>まだコマンド履歴がありません</p>
+        <p class="empty-sub">音声またはテキストでコマンドを実行すると<br>ここに履歴が表示されます</p>
+      </div>`;
+    return;
+  }
+
+  dom.historyList.innerHTML = state.history.map(item => {
+    const label = getIntentLabel(item.type);
+    const badgeClass = item.success ? 'success' : 'fail';
+    const badgeText = item.success ? '成功' : '失敗';
+    const time = new Date(item.timestamp).toLocaleString('ja-JP');
+
+    return `
+      <div class="history-item">
+        <div class="history-header">
+          <span class="history-type">${label}</span>
+          <span class="history-badge ${badgeClass}">${badgeText}</span>
+        </div>
+        <p class="history-raw">${escapeHtml(item.rawText)}</p>
+        <p class="history-response">${escapeHtml(item.response)}</p>
+        <p class="history-time">${time}</p>
+      </div>`;
+  }).join('');
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ============================================
+// Service Worker 登録
+// ============================================
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(err => {
+    console.warn('Service Worker登録失敗:', err);
+  });
+}

@@ -1,0 +1,23 @@
+{
+  "name": "AI Agent - 音声パーソナルアシスタント",
+  "short_name": "AI Agent",
+  "description": "音声コマンドでGmail・Googleカレンダー・Google Tasksを操作するパーソナルAIエージェント",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
