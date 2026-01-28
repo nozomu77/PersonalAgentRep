@@ -427,8 +427,16 @@ body.state-responding #pulse-ring {
   letter-spacing: 0.5px;
 }
 
+.settings-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
 #auth-status {
   margin-bottom: 12px;
+  margin-top: 12px;
 }
 
 #auth-message {

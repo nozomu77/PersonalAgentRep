@@ -45,6 +45,8 @@ const dom = {
   btnSend: $('#btn-send'),
 
   // Settings
+  inputClientId: $('#input-client-id'),
+  btnSaveClientId: $('#btn-save-client-id'),
   btnGoogleAuth: $('#btn-google-auth'),
   authMessage: $('#auth-message'),
   inputWakeword: $('#input-wakeword'),
@@ -367,23 +369,27 @@ function drawWave(active) {
 // ============================================
 
 function initSettings() {
+  // クライアントID入力欄
+  dom.inputClientId.value = state.clientId;
+  dom.btnSaveClientId.addEventListener('click', () => {
+    const id = dom.inputClientId.value.trim();
+    if (!id) { alert('クライアントIDを入力してください'); return; }
+    state.clientId = id;
+    localStorage.setItem('google_client_id', id);
+    setupTokenClient(id);
+    alert('クライアントIDを保存しました。「ログイン」ボタンを押してください。');
+  });
+
   // Google認証ボタン
   dom.btnGoogleAuth.addEventListener('click', () => {
     if (isAuthenticated()) {
       signOut();
     } else {
-      // Client IDが未設定なら入力を促す
       if (!state.clientId) {
-        const id = prompt('Google Cloud ConsoleのクライアントIDを入力してください:');
-        if (!id) return;
-        state.clientId = id;
-        localStorage.setItem('google_client_id', id);
-        setupTokenClient(id);
-        // 少し待ってからサインイン
-        setTimeout(() => signIn(), 500);
-      } else {
-        signIn();
+        alert('先にクライアントIDを入力して保存してください');
+        return;
       }
+      signIn();
     }
   });
 
