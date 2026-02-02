@@ -11,6 +11,15 @@ export const IntentType = {
   CREATE_TASK: 'create_task',
   LIST_TASKS: 'list_tasks',
   SET_REMINDER: 'set_reminder',
+  // 新機能
+  WEATHER: 'weather',
+  WEB_SEARCH: 'web_search',
+  TRANSLATE: 'translate',
+  CALCULATE: 'calculate',
+  NEWS: 'news',
+  SET_TIMER: 'set_timer',
+  SAVE_NOTE: 'save_note',
+  LIST_NOTES: 'list_notes',
   UNKNOWN: 'unknown',
 };
 
@@ -22,6 +31,14 @@ const IntentLabels = {
   [IntentType.CREATE_TASK]: 'タスク作成',
   [IntentType.LIST_TASKS]: 'タスク一覧',
   [IntentType.SET_REMINDER]: 'リマインダー',
+  [IntentType.WEATHER]: '天気',
+  [IntentType.WEB_SEARCH]: 'ウェブ検索',
+  [IntentType.TRANSLATE]: '翻訳',
+  [IntentType.CALCULATE]: '計算',
+  [IntentType.NEWS]: 'ニュース',
+  [IntentType.SET_TIMER]: 'タイマー',
+  [IntentType.SAVE_NOTE]: 'メモ保存',
+  [IntentType.LIST_NOTES]: 'メモ一覧',
   [IntentType.UNKNOWN]: '不明',
 };
 
@@ -121,6 +138,71 @@ function parseWithRules(text) {
     };
   }
 
+  // 天気
+  if (containsAny(n, ['天気', '気温', '降水', '雨', '晴れ', '曇り', '気象'])) {
+    return {
+      type: IntentType.WEATHER,
+      params: { location: extractLocation(text) },
+    };
+  }
+
+  // ウェブ検索
+  if (containsAny(n, ['検索', '調べて', 'ググ', '探して', 'サーチ'])) {
+    return {
+      type: IntentType.WEB_SEARCH,
+      params: { query: extractSearchQuery(text) },
+    };
+  }
+
+  // 翻訳
+  if (containsAny(n, ['翻訳', '英語に', '日本語に', '通訳', '英訳', '和訳'])) {
+    return {
+      type: IntentType.TRANSLATE,
+      params: {
+        text: extractTranslateText(text),
+        targetLang: extractTargetLang(text),
+      },
+    };
+  }
+
+  // 計算
+  if (containsAny(n, ['計算', '足し', '引き', '掛け', '割り', 'いくら', 'いくつ', '何%', '何パーセント']) ||
+      /[\d０-９]+\s*[+\-×÷*/＋−×÷]\s*[\d０-９]+/.test(n)) {
+    return {
+      type: IntentType.CALCULATE,
+      params: { expression: extractMathExpression(text) },
+    };
+  }
+
+  // ニュース
+  if (containsAny(n, ['ニュース', '最新情報', 'ヘッドライン', '話題', 'トピック'])) {
+    return {
+      type: IntentType.NEWS,
+      params: { category: extractNewsCategory(text) },
+    };
+  }
+
+  // タイマー
+  if (containsAny(n, ['タイマー', '分後', '秒後', '時間後', 'アラーム', 'カウントダウン'])) {
+    return {
+      type: IntentType.SET_TIMER,
+      params: { seconds: extractTimerSeconds(text) },
+    };
+  }
+
+  // メモ一覧
+  if (containsAny(n, ['メモ一覧', 'メモを見', 'メモ確認', 'メモを確認', 'ノート一覧'])) {
+    return { type: IntentType.LIST_NOTES, params: {} };
+  }
+
+  // メモ保存
+  if (containsAny(n, ['メモ', 'ノート', '記録', '書いて', 'めも'])) {
+    return {
+      type: IntentType.SAVE_NOTE,
+      params: { content: extractNoteContent(text) },
+    };
+  }
+
   return { type: IntentType.UNKNOWN, params: { rawText: text } };
 }
 
@@ -139,6 +221,14 @@ async function parseWithOpenAI(text, apiKey) {
 - create_task: タスク作成 (title, notes)
 - list_tasks: タスク一覧
 - set_reminder: リマインダー (title, date, time)
+- weather: 天気 (location)
+- web_search: ウェブ検索 (query)
+- translate: 翻訳 (text, targetLang: ja/en/zh/ko)
+- calculate: 計算 (expression)
+- news: ニュース (category: general/sports/technology/entertainment/business)
+- set_timer: タイマー (seconds)
+- save_note: メモ保存 (content)
+- list_notes: メモ一覧
 - unknown: 不明
 
 日付は today/tomorrow/day_after_tomorrow または YYYY-MM-DD 形式。
@@ -306,4 +396,105 @@ function extractTaskTitle(text) {
     if (r && !['タスク', '追加', '登録'].includes(r)) return r;
   }
   return text;
+}
+
+// 天気の場所抽出
+function extractLocation(text) {
+  const m = text.match(/(.+?)(?:の天気|の気温|は[晴曇雨])/);
+  if (m) {
+    const loc = m[1].replace(/今日|明日|明後日/g, '').trim();
+    if (loc) return loc;
+  }
+  return '東京';
+}
+
+// 検索クエリ抽出
+function extractSearchQuery(text) {
+  const m1 = text.match(/「(.+?)」/);
+  if (m1) return m1[1];
+
+  const m2 = text.match(/(.+?)(?:を|について|で)(?:検索|調べ|ググ|探)/);
+  if (m2) return m2[1].trim();
+
+  const m3 = text.match(/(?:検索|調べて|ググって)[：:\s]*(.+)/);
+  if (m3) return m3[1].trim();
+
+  return text.replace(/検索|調べて|ググって|探して/g, '').trim();
+}
+
+// 翻訳テキスト抽出
+function extractTranslateText(text) {
+  const m1 = text.match(/「(.+?)」/);
+  if (m1) return m1[1];
+
+  const m2 = text.match(/(.+?)を(?:翻訳|英語|日本語|英訳|和訳)/);
+  if (m2) return m2[1].trim();
+
+  return text.replace(/翻訳|英語に|日本語に|して/g, '').trim();
+}
+
+// 翻訳先言語抽出
+function extractTargetLang(text) {
+  if (containsAny(text, ['日本語', '和訳'])) return 'ja';
+  if (containsAny(text, ['英語', '英訳'])) return 'en';
+  if (containsAny(text, ['中国語'])) return 'zh';
+  if (containsAny(text, ['韓国語'])) return 'ko';
+  return 'en'; // デフォルト英語
+}
+
+// 数式抽出
+function extractMathExpression(text) {
+  // 全角を半角に
+  let expr = text
+    .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/＋/g, '+').replace(/−/g, '-').replace(/×/g, '*').replace(/÷/g, '/')
+    .replace(/掛ける/g, '*').replace(/割る/g, '/').replace(/足す/g, '+').replace(/引く/g, '-')
+    .replace(/プラス/g, '+').replace(/マイナス/g, '-');
+
+  // 数式部分を抽出
+  const m = expr.match(/[\d.]+\s*[+\-*/]\s*[\d.]+(?:\s*[+\-*/]\s*[\d.]+)*/);
+  if (m) return m[0];
+
+  return expr.replace(/計算|して|は|いくつ|いくら/g, '').trim();
+}
+
+// ニュースカテゴリ抽出
+function extractNewsCategory(text) {
+  if (containsAny(text, ['スポーツ', '野球', 'サッカー'])) return 'sports';
+  if (containsAny(text, ['テクノロジー', 'IT', 'テック', '技術'])) return 'technology';
+  if (containsAny(text, ['エンタメ', '芸能', '映画', '音楽'])) return 'entertainment';
+  if (containsAny(text, ['ビジネス', '経済', '株', '金融'])) return 'business';
+  return 'general';
+}
+
+// タイマー秒数抽出
+function extractTimerSeconds(text) {
+  const normalized = text.replace(/[０-９]/g, c =>
+    String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
+  );
+
+  const mHour = normalized.match(/(\d+)\s*時間/);
+  const mMin = normalized.match(/(\d+)\s*分/);
+  const mSec = normalized.match(/(\d+)\s*秒/);
+
+  let total = 0;
+  if (mHour) total += parseInt(mHour[1]) * 3600;
+  if (mMin) total += parseInt(mMin[1]) * 60;
+  if (mSec) total += parseInt(mSec[1]);
+
+  return total || 180; // デフォルト3分
+}
+
+// メモ内容抽出
+function extractNoteContent(text) {
+  const m1 = text.match(/「(.+?)」/);
+  if (m1) return m1[1];
+
+  const m2 = text.match(/(?:メモ|ノート|記録)[：:\s]*(.+)/);
+  if (m2) return m2[1].trim();
+
+  const m3 = text.match(/(.+?)を(?:メモ|ノート|記録)/);
+  if (m3) return m3[1].trim();
+
+  return text.replace(/メモ|ノート|記録|して|書いて/g, '').trim();
 }

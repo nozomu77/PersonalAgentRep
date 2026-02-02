@@ -6,6 +6,7 @@ import { SpeechEngine } from './speech.js';
 import { parseIntent, getIntentLabel, IntentType } from './agent.js';
 import { initAuth, setupTokenClient, signIn, signOut, isAuthenticated } from './auth.js';
 import { Gmail, Calendar, Tasks } from './google-services.js';
+import { Weather, WebSearch, Translate, Calculator, News, Timer, Notes } from './extra-services.js';
 
 // ============================================
 // 状態管理
@@ -188,6 +189,7 @@ async function processCommand(text) {
       IntentType.CREATE_EVENT,
       IntentType.CREATE_TASK,
       IntentType.SET_REMINDER,
+      IntentType.SAVE_NOTE,
     ].includes(intent.type);
 
     if (needsConfirm) {
@@ -278,6 +280,13 @@ function buildConfirmSummary(intent, rawText) {
           <div class="confirm-row"><span class="confirm-label">内容</span><span>${p.title || rawText}</span></div>
           <div class="confirm-row"><span class="confirm-label">日付</span><span>${dateName[p.date] || p.date || '(未指定)'}</span></div>`,
       };
+    case IntentType.SAVE_NOTE:
+      return {
+        title: 'メモを保存',
+        message: `メモ: ${p.content || rawText}`,
+        body: `
+          <div class="confirm-row"><span class="confirm-label">内容</span><span>${p.content || rawText}</span></div>`,
+      };
     default:
       return { title: '実行確認', message: rawText, body: `<p>${rawText}</p>` };
   }
@@ -304,19 +313,60 @@ function showConfirmDialog(title, bodyHtml) {
 }
 
 async function executeIntent(intent, rawText) {
-  if (!isAuthenticated()) {
-    return {
-      type: intent.type,
-      rawText,
-      response: 'Googleアカウントにログインしてください（設定タブから）',
-      success: false,
-      timestamp: new Date().toISOString(),
-    };
-  }
-
   let response;
 
   try {
+    // Google認証不要の機能
+    switch (intent.type) {
+      case IntentType.WEATHER:
+        response = await Weather.getWeather(intent.params.location || '東京');
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.WEB_SEARCH:
+        response = WebSearch.search(intent.params.query || rawText);
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.TRANSLATE:
+        response = await Translate.translate(
+          intent.params.text || rawText,
+          intent.params.targetLang || 'en'
+        );
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.CALCULATE:
+        response = Calculator.calculate(intent.params.expression || rawText);
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.NEWS:
+        response = await News.getNews(intent.params.category || 'general');
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.SET_TIMER:
+        response = Timer.setTimer(intent.params.seconds || 180, () => {
+          showResponse('タイマーが終了しました！');
+        });
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.SAVE_NOTE:
+        response = Notes.saveNote(intent.params.content || rawText);
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.LIST_NOTES:
+        response = Notes.listNotes();
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+    }
+
+    // Google認証が必要な機能
+    if (!isAuthenticated()) {
+      return {
+        type: intent.type,
+        rawText,
+        response: 'Googleアカウントにログインしてください（設定タブから）',
+        success: false,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
     switch (intent.type) {
       case IntentType.SEND_EMAIL:
         response = await Gmail.sendEmail(
