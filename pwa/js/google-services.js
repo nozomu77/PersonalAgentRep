@@ -55,12 +55,20 @@ function formatDisplayDate(dateStr) {
 }
 
 function toISOStringWithTZ(date) {
-  // Asia/Tokyo (UTC+9) 用のISO文字列
+  // ローカル時間をそのままISO形式で出力 (Asia/Tokyo対応)
+  const pad = (n) => String(n).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  const MM = pad(date.getMonth() + 1);
+  const dd = pad(date.getDate());
+  const hh = pad(date.getHours());
+  const mm = pad(date.getMinutes());
+  const ss = pad(date.getSeconds());
+  // タイムゾーンオフセット
   const offset = -date.getTimezoneOffset();
   const sign = offset >= 0 ? '+' : '-';
-  const h = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
-  const m = String(Math.abs(offset) % 60).padStart(2, '0');
-  return date.toISOString().replace('Z', `${sign}${h}:${m}`);
+  const oh = pad(Math.floor(Math.abs(offset) / 60));
+  const om = pad(Math.abs(offset) % 60);
+  return `${yyyy}-${MM}-${dd}T${hh}:${mm}:${ss}${sign}${oh}:${om}`;
 }
 
 // ============================================
