@@ -1,21 +1,22 @@
-# iPhone AI Agent
+# AI Agent PWA
 
-自分専用のiPhone AIエージェントアプリ。音声コマンドでGoogle サービス（Gmail、Googleカレンダー、Google Tasks）を操作できます。
+音声コマンドでGoogle サービス（Gmail、Googleカレンダー、Google Tasks）を操作できるPWAアプリ。
 
 ## 機能
 
-- **ウェイクワード起動**: 「ヘイエージェント」と話しかけるとアプリが待ち受け状態に
-- **音声コマンド認識**: 自然言語でタスクを指示
-- **Gmail連携**: メールの送信・検索
+- **音声コマンド認識**: マイクボタンを押して話しかける
+- **実行前確認**: 書き込み系操作は確認ダイアログを表示
+- **Gmail連携**: メールの送信・未読確認
 - **Googleカレンダー連携**: 予定の作成・確認
 - **Google Tasks連携**: タスク・リマインダーの作成・管理
+- **オフライン対応**: Service Workerによるキャッシュ
 
 ## 対応コマンド例
 
 | 発話例 | 動作 |
 |--------|------|
 | 「明日の10時に会議を入れて」 | Googleカレンダーに予定を作成 |
-| 「田中さんにメールして、件名は会議について」 | Gmailでメール送信 |
+| 「田中さんにメールして」 | Gmailでメール送信 |
 | 「買い物リストをリマインドして」 | Google Tasksにタスクを追加 |
 | 「今日の予定を教えて」 | Googleカレンダーの予定を読み上げ |
 | 「未読メールを確認して」 | Gmailの未読メールを読み上げ |
@@ -24,23 +25,23 @@
 
 ```
 ┌─────────────────────────────────────────┐
-│              SwiftUI Views              │
-│  (HomeView / SettingsView / History)    │
+│              index.html                 │
+│     (Home / History / Settings タブ)     │
 ├─────────────────────────────────────────┤
-│            AgentViewModel               │
-│     (状態管理・UIとサービスの橋渡し)       │
+│               app.js                    │
+│     (状態管理・UIとサービスの橋渡し)        │
 ├─────────────────────────────────────────┤
-│            AIAgentService               │
+│              agent.js                   │
 │   (意図解析・コマンドルーティング)          │
 ├──────────┬──────────┬───────────────────┤
 │  Gmail   │ Calendar │   Google Tasks   │
-│ Service  │ Service  │    Service       │
+│          │          │                  │
 ├──────────┴──────────┴───────────────────┤
-│         GoogleAuthManager               │
-│          (OAuth 2.0 認証)               │
+│     google-services.js / auth.js        │
+│   (Google Identity Services OAuth)      │
 ├─────────────────────────────────────────┤
-│         SpeechRecognizer                │
-│   (ウェイクワード検出・音声認識)           │
+│             speech.js                   │
+│          (Web Speech API)               │
 └─────────────────────────────────────────┘
 ```
 
@@ -53,38 +54,53 @@
    - Gmail API
    - Google Calendar API
    - Google Tasks API
-3. OAuth 2.0 クライアントIDを作成（iOSアプリケーション）
-4. バンドルIDに `com.yourname.iPhoneAIAgent` を設定
+3. OAuth 2.0 クライアントIDを作成（**ウェブアプリケーション**を選択）
+4. 承認済みJavaScriptオリジンを設定:
+   - `https://yourusername.github.io`（GitHub Pages用）
+   - `http://localhost:8000`（ローカル開発用）
 
-### 2. OpenAI API キー（オプション）
+### 2. デプロイ
+
+```bash
+# GitHub Pagesの場合（リポジトリをpublicにする必要あり）
+git push origin main
+# Settings > Pages > Source: Deploy from branch (main)
+```
+
+### 3. アプリの設定
+
+1. デプロイしたURLにアクセス
+2. 設定タブでGoogle OAuth クライアントIDを入力
+3. 「Googleでサインイン」でログイン
+4. マイクボタンを押して音声コマンドを実行
+
+### 4. OpenAI API キー（オプション）
 
 高度な自然言語理解を使う場合:
 1. [OpenAI Platform](https://platform.openai.com/) でAPIキーを取得
-2. アプリの設定画面でキーを入力
-
-### 3. ビルド & 実行
-
-1. `iPhoneAIAgent.xcodeproj` を Xcode で開く
-2. `GoogleConfig.swift` にクライアントIDを設定
-3. 実機でビルド・実行（音声認識はシミュレータ非対応）
-
-### 4. 権限設定
-
-アプリ初回起動時に以下の権限を許可してください:
-- マイクへのアクセス（音声認識用）
-- 音声認識の使用
+2. 設定画面でキーを入力
 
 ## 技術スタック
 
-- **UI**: SwiftUI
-- **音声認識**: Apple Speech Framework
-- **認証**: OAuth 2.0 (PKCE)
-- **API連携**: URLSession + Google REST API
+- **UI**: HTML/CSS/JavaScript (Vanilla)
+- **音声認識**: Web Speech API
+- **認証**: Google Identity Services (OAuth 2.0)
+- **API連携**: Fetch API + Google REST API
 - **意図解析**: ルールベース + OpenAI API（オプション）
-- **最小iOS**: 17.0
+- **オフライン**: Service Worker
+
+## ブラウザ対応
+
+| ブラウザ | 音声認識 | 備考 |
+|---------|---------|------|
+| Chrome (Android) | ○ | 推奨 |
+| Chrome (iOS) | ○ | 推奨 |
+| Safari (iOS) | △ | 制限あり |
+| Edge | ○ | |
+| Firefox | × | Web Speech API未対応 |
 
 ## 注意事項
 
-- **Google Keep**: 公開APIが存在しないため、代わりにGoogle Tasks APIを使用しています
-- **音声認識**: 実機でのみ動作します（シミュレータ非対応）
-- **バックグラウンド**: iOSの制約により、バックグラウンドでの常時音声認識はできません。アプリがフォアグラウンドの状態で使用してください
+- **Google Keep**: 公開APIが存在しないため、Google Tasks APIを使用
+- **HTTPS必須**: 音声認識はHTTPS環境でのみ動作
+- **iOSのSafari**: 一部制限があるためChromeを推奨
