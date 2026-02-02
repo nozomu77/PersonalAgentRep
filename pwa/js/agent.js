@@ -20,6 +20,7 @@ export const IntentType = {
   SET_TIMER: 'set_timer',
   SAVE_NOTE: 'save_note',
   LIST_NOTES: 'list_notes',
+  HELP: 'help',
   UNKNOWN: 'unknown',
 };
 
@@ -39,6 +40,7 @@ const IntentLabels = {
   [IntentType.SET_TIMER]: 'タイマー',
   [IntentType.SAVE_NOTE]: 'メモ保存',
   [IntentType.LIST_NOTES]: 'メモ一覧',
+  [IntentType.HELP]: 'ヘルプ',
   [IntentType.UNKNOWN]: '不明',
 };
 
@@ -69,6 +71,11 @@ export async function parseIntent(text) {
 
 function parseWithRules(text) {
   const n = text.toLowerCase();
+
+  // ヘルプ・機能一覧
+  if (containsAny(n, ['どんな機能', '何ができる', '使い方', 'ヘルプ', '機能一覧', '何ができ', 'できること', '使える機能'])) {
+    return { type: IntentType.HELP, params: {} };
+  }
 
   // メール送信
   if (containsAny(n, ['メール', 'メールして', 'メールを送', 'mail', '送信して'])) {

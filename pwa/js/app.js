@@ -354,6 +354,28 @@ async function executeIntent(intent, rawText) {
       case IntentType.LIST_NOTES:
         response = Notes.listNotes();
         return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.HELP:
+        response = `使える機能一覧:
+
+【Google連携】※要ログイン
+・メール送信「〇〇にメールして」
+・メール確認「未読メール確認」
+・予定作成「明日10時に会議」
+・予定確認「今日の予定」
+・タスク作成「〇〇をタスクに追加」
+・タスク確認「タスク一覧」
+・リマインダー「〇〇をリマインド」
+
+【その他】※ログイン不要
+・天気「東京の天気」「明日の天気」
+・検索「〇〇を検索」
+・翻訳「〇〇を英語に」
+・計算「100+200」
+・ニュース「ニュース」「スポーツニュース」
+・タイマー「3分タイマー」
+・メモ「〇〇をメモ」「メモ一覧」`;
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
     }
 
     // Google認証が必要な機能
