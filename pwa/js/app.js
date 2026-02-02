@@ -2,7 +2,7 @@
 // AI Agent PWA - メインアプリケーション
 // ============================================
 
-import { SpeechEngine, speak } from './speech.js';
+import { SpeechEngine } from './speech.js';
 import { parseIntent, getIntentLabel, IntentType } from './agent.js';
 import { initAuth, setupTokenClient, signIn, signOut, isAuthenticated } from './auth.js';
 import { Gmail, Calendar, Tasks } from './google-services.js';
@@ -134,7 +134,6 @@ function initHome() {
   speech.onWakeWord = () => {
     setAgentState('activated');
     showResponse('はい、何をしますか？');
-    speak('はい、何をしますか？');
   };
 
   speech.onCommand = (command) => {
@@ -211,7 +210,6 @@ async function processCommand(text) {
     // 結果表示
     showResponse(result.response);
     setAgentState('responding');
-    speak(result.response);
     addHistory(result);
   } catch (e) {
     const errorMsg = `エラー: ${e.message}`;
@@ -387,7 +385,7 @@ function setAgentState(newState) {
   // アイコン更新
   const icons = {
     idle: '🎤', listening: '🎤', activated: '👂',
-    processing: '🧠', responding: '🔊',
+    processing: '🧠', responding: '💬',
   };
   dom.agentIcon.textContent = icons[newState] || '🎤';
 
