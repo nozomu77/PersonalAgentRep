@@ -427,8 +427,16 @@ body.state-responding #pulse-ring {
   letter-spacing: 0.5px;
 }
 
+.settings-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
 #auth-status {
   margin-bottom: 12px;
+  margin-top: 12px;
 }
 
 #auth-message {
@@ -519,6 +527,76 @@ body.state-responding #pulse-ring {
   font-weight: 600;
   width: 90px;
   color: var(--accent-light);
+}
+
+/* ---- Confirm Dialog ---- */
+#confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+#confirm-dialog {
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+#confirm-title {
+  font-size: 17px;
+  margin-bottom: 16px;
+}
+
+#confirm-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+#confirm-body .confirm-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+#confirm-body .confirm-label {
+  color: var(--accent-light);
+  font-weight: 600;
+  min-width: 70px;
+}
+
+#confirm-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.confirm-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirm-btn.cancel {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.confirm-btn.ok {
+  background: var(--accent);
+  color: white;
 }
 
 /* ---- Utility ---- */

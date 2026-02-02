@@ -246,7 +246,12 @@ function extractDate(text) {
   if (text.includes('明後日')) return 'day_after_tomorrow';
   if (text.includes('明日')) return 'tomorrow';
 
-  const m = text.match(/(\d{1,2})月(\d{1,2})日/);
+  // 全角数字を半角に変換
+  const normalized = text.replace(/[０-９]/g, c =>
+    String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
+  );
+
+  const m = normalized.match(/(\d{1,2})月(\d{1,2})日/);
   if (m) {
     const year = new Date().getFullYear();
     return `${year}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
@@ -255,10 +260,21 @@ function extractDate(text) {
 }
 
 function extractTime(text) {
-  const m = text.match(/(\d{1,2})時(\d{1,2})?分?/);
+  // 全角数字を半角に変換
+  const normalized = text.replace(/[０-９]/g, c =>
+    String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
+  );
+
+  // 「9時30分」「10時」「15時半」パターン
+  const m = normalized.match(/(\d{1,2})\s*時\s*(?:(\d{1,2})\s*分|半)?/);
   if (m) {
     const h = m[1].padStart(2, '0');
-    const min = (m[2] || '0').padStart(2, '0');
+    let min = '00';
+    if (m[2]) {
+      min = m[2].padStart(2, '0');
+    } else if (normalized.includes('半')) {
+      min = '30';
+    }
     return `${h}:${min}`;
   }
   return '';
