@@ -196,7 +196,7 @@ async function processCommand(text) {
       // 確認ダイアログを表示して待つ
       const summary = buildConfirmSummary(intent, text);
       showResponse(summary.message);
-      const confirmed = await showConfirmDialog(summary.title, summary.body);
+      const confirmed = await showConfirmDialog(summary.title, summary.rows);
 
       if (!confirmed) {
         showResponse('キャンセルしました');
@@ -250,52 +250,70 @@ function buildConfirmSummary(intent, rawText) {
       return {
         title: 'メール送信',
         message: `メール送信: ${p.to || '(宛先未指定)'} / 件名: ${p.subject || '(なし)'}`,
-        body: `
-          <div class="confirm-row"><span class="confirm-label">宛先</span><span>${p.to || '(未指定)'}</span></div>
-          <div class="confirm-row"><span class="confirm-label">件名</span><span>${p.subject || '(なし)'}</span></div>
-          <div class="confirm-row"><span class="confirm-label">本文</span><span>${p.body || '(なし)'}</span></div>`,
+        rows: [
+          { label: '宛先', value: p.to || '(未指定)' },
+          { label: '件名', value: p.subject || '(なし)' },
+          { label: '本文', value: p.body || '(なし)' },
+        ],
       };
     case IntentType.CREATE_EVENT:
       return {
         title: '予定を作成',
         message: `予定作成: ${p.title || rawText} / ${dateName[p.date] || p.date || '今日'} ${p.time || '09:00'}`,
-        body: `
-          <div class="confirm-row"><span class="confirm-label">タイトル</span><span>${p.title || rawText}</span></div>
-          <div class="confirm-row"><span class="confirm-label">日付</span><span>${dateName[p.date] || p.date || '今日'}</span></div>
-          <div class="confirm-row"><span class="confirm-label">時間</span><span>${p.time || '09:00 (デフォルト)'}</span></div>`,
+        rows: [
+          { label: 'タイトル', value: p.title || rawText },
+          { label: '日付', value: dateName[p.date] || p.date || '今日' },
+          { label: '時間', value: p.time || '09:00 (デフォルト)' },
+        ],
       };
     case IntentType.CREATE_TASK:
       return {
         title: 'タスクを作成',
         message: `タスク作成: ${p.title || rawText}`,
-        body: `
-          <div class="confirm-row"><span class="confirm-label">タスク名</span><span>${p.title || rawText}</span></div>
-          <div class="confirm-row"><span class="confirm-label">メモ</span><span>${p.notes || '(なし)'}</span></div>`,
+        rows: [
+          { label: 'タスク名', value: p.title || rawText },
+          { label: 'メモ', value: p.notes || '(なし)' },
+        ],
       };
     case IntentType.SET_REMINDER:
       return {
         title: 'リマインダーを作成',
         message: `リマインダー: ${p.title || rawText}`,
-        body: `
-          <div class="confirm-row"><span class="confirm-label">内容</span><span>${p.title || rawText}</span></div>
-          <div class="confirm-row"><span class="confirm-label">日付</span><span>${dateName[p.date] || p.date || '(未指定)'}</span></div>`,
+        rows: [
+          { label: '内容', value: p.title || rawText },
+          { label: '日付', value: dateName[p.date] || p.date || '(未指定)' },
+        ],
       };
     case IntentType.SAVE_NOTE:
       return {
         title: 'メモを保存',
         message: `メモ: ${p.content || rawText}`,
-        body: `
-          <div class="confirm-row"><span class="confirm-label">内容</span><span>${p.content || rawText}</span></div>`,
+        rows: [
+          { label: '内容', value: p.content || rawText },
+        ],
       };
     default:
-      return { title: '実行確認', message: rawText, body: `<p>${rawText}</p>` };
+      return { title: '実行確認', message: rawText, rows: [{ label: '内容', value: rawText }] };
   }
 }
 
-function showConfirmDialog(title, bodyHtml) {
+function showConfirmDialog(title, rows) {
   return new Promise((resolve) => {
     dom.confirmTitle.textContent = title;
-    dom.confirmBody.innerHTML = bodyHtml;
+    // DOM APIで安全に要素を作成 (XSS対策)
+    dom.confirmBody.textContent = '';
+    rows.forEach(({ label, value }) => {
+      const row = document.createElement('div');
+      row.className = 'confirm-row';
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'confirm-label';
+      labelSpan.textContent = label;
+      const valueSpan = document.createElement('span');
+      valueSpan.textContent = value;
+      row.appendChild(labelSpan);
+      row.appendChild(valueSpan);
+      dom.confirmBody.appendChild(row);
+    });
     dom.confirmOverlay.classList.remove('hidden');
 
     const cleanup = () => {
@@ -627,39 +645,65 @@ function addHistory(result) {
 }
 
 function renderHistory() {
+  // DOM APIで安全に要素を作成 (XSS対策)
+  dom.historyList.textContent = '';
+
   if (state.history.length === 0) {
-    dom.historyList.innerHTML = `
-      <div class="empty-state">
-        <p class="empty-icon">📋</p>
-        <p>まだコマンド履歴がありません</p>
-        <p class="empty-sub">音声またはテキストでコマンドを実行すると<br>ここに履歴が表示されます</p>
-      </div>`;
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    const icon = document.createElement('p');
+    icon.className = 'empty-icon';
+    icon.textContent = '📋';
+    const msg = document.createElement('p');
+    msg.textContent = 'まだコマンド履歴がありません';
+    const sub = document.createElement('p');
+    sub.className = 'empty-sub';
+    sub.textContent = '音声またはテキストでコマンドを実行するとここに履歴が表示されます';
+    empty.appendChild(icon);
+    empty.appendChild(msg);
+    empty.appendChild(sub);
+    dom.historyList.appendChild(empty);
     return;
   }
 
-  dom.historyList.innerHTML = state.history.map(item => {
+  state.history.forEach(item => {
     const label = getIntentLabel(item.type);
     const badgeClass = item.success ? 'success' : 'fail';
     const badgeText = item.success ? '成功' : '失敗';
     const time = new Date(item.timestamp).toLocaleString('ja-JP');
 
-    return `
-      <div class="history-item">
-        <div class="history-header">
-          <span class="history-type">${label}</span>
-          <span class="history-badge ${badgeClass}">${badgeText}</span>
-        </div>
-        <p class="history-raw">${escapeHtml(item.rawText)}</p>
-        <p class="history-response">${escapeHtml(item.response)}</p>
-        <p class="history-time">${time}</p>
-      </div>`;
-  }).join('');
-}
+    const div = document.createElement('div');
+    div.className = 'history-item';
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+    const header = document.createElement('div');
+    header.className = 'history-header';
+    const typeSpan = document.createElement('span');
+    typeSpan.className = 'history-type';
+    typeSpan.textContent = label;
+    const badge = document.createElement('span');
+    badge.className = `history-badge ${badgeClass}`;
+    badge.textContent = badgeText;
+    header.appendChild(typeSpan);
+    header.appendChild(badge);
+
+    const rawP = document.createElement('p');
+    rawP.className = 'history-raw';
+    rawP.textContent = item.rawText;
+
+    const respP = document.createElement('p');
+    respP.className = 'history-response';
+    respP.textContent = item.response;
+
+    const timeP = document.createElement('p');
+    timeP.className = 'history-time';
+    timeP.textContent = time;
+
+    div.appendChild(header);
+    div.appendChild(rawP);
+    div.appendChild(respP);
+    div.appendChild(timeP);
+    dom.historyList.appendChild(div);
+  });
 }
 
 // ============================================
