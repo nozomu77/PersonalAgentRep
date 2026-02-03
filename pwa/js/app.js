@@ -36,6 +36,9 @@ const dom = {
   stateMessage: $('#state-message'),
   waveCanvas: $('#wave-canvas'),
   transcription: $('#transcription'),
+  progressArea: $('#progress-area'),
+  progressSteps: $$('.progress-step'),
+  progressConnectors: $$('.progress-connector'),
   responseArea: $('#response-area'),
   responseText: $('#response-text'),
   btnMic: $('#btn-mic'),
@@ -177,11 +180,12 @@ function sendManualCommand() {
 async function processCommand(text) {
   setAgentState('processing');
   dom.transcription.textContent = text;
-  showResponse('解析中...');
+  showProgress('parse');
 
   try {
     // 意図解析
     const intent = await parseIntent(text);
+    setProgressDone('parse');
 
     // 読み取り系は確認不要、書き込み系は確認を挟む
     const needsConfirm = [
@@ -194,6 +198,7 @@ async function processCommand(text) {
 
     if (needsConfirm) {
       // 確認ダイアログを表示して待つ
+      hideProgress();
       const summary = buildConfirmSummary(intent, text);
       showResponse(summary.message);
       const confirmed = await showConfirmDialog(summary.title, summary.rows);
@@ -203,17 +208,25 @@ async function processCommand(text) {
         resetToIdle();
         return;
       }
+      showProgress('execute');
+    } else {
+      showProgress('execute');
     }
 
     // コマンド実行
-    showResponse('実行中...');
     const result = await executeIntent(intent, text);
+    setProgressDone('execute');
+    showProgress('done');
+    setProgressDone('done');
 
-    // 結果表示
+    // 結果表示 (少し待ってから表示)
+    await sleep(300);
+    hideProgress();
     showResponse(result.response);
     setAgentState('responding');
     addHistory(result);
   } catch (e) {
+    hideProgress();
     const errorMsg = `エラー: ${e.message}`;
     showResponse(errorMsg);
     setAgentState('responding');
@@ -235,6 +248,56 @@ function resetToIdle() {
   dom.btnMic.classList.remove('recording');
   dom.micIcon.textContent = '🎙️';
   setAgentState('idle');
+  hideProgress();
+}
+
+// ============================================
+// プログレス表示
+// ============================================
+
+function showProgress(step) {
+  dom.progressArea.classList.remove('hidden');
+  dom.responseArea.classList.add('hidden');
+
+  const steps = ['parse', 'execute', 'done'];
+  const stepIndex = steps.indexOf(step);
+
+  dom.progressSteps.forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    if (i < stepIndex) {
+      el.classList.add('done');
+    } else if (i === stepIndex) {
+      el.classList.add('active');
+    }
+  });
+
+  dom.progressConnectors.forEach((el, i) => {
+    el.classList.remove('done');
+    if (i < stepIndex) {
+      el.classList.add('done');
+    }
+  });
+}
+
+function setProgressDone(step) {
+  const steps = ['parse', 'execute', 'done'];
+  const stepIndex = steps.indexOf(step);
+
+  if (stepIndex >= 0 && dom.progressSteps[stepIndex]) {
+    dom.progressSteps[stepIndex].classList.remove('active');
+    dom.progressSteps[stepIndex].classList.add('done');
+  }
+  if (stepIndex > 0 && dom.progressConnectors[stepIndex - 1]) {
+    dom.progressConnectors[stepIndex - 1].classList.add('done');
+  }
+}
+
+function hideProgress() {
+  dom.progressArea.classList.add('hidden');
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ============================================

@@ -219,13 +219,26 @@ body.state-responding #pulse-ring {
 
 /* Transcription */
 #transcription-area {
-  min-height: 24px;
+  min-height: 60px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
 }
 
 #transcription {
   font-size: 14px;
   color: var(--text-secondary);
+  transition: all 0.3s ease;
+}
+
+/* 音声認識中は文字を大きく表示 */
+body.state-activated #transcription,
+body.state-listening #transcription {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* Response */
@@ -242,6 +255,62 @@ body.state-responding #pulse-ring {
   font-size: 15px;
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+/* Progress Indicator */
+#progress-area {
+  width: 100%;
+  max-width: 360px;
+  margin-bottom: 12px;
+}
+
+#progress-steps {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--text-muted);
+  transition: all 0.3s ease;
+}
+
+.progress-step.active {
+  background: var(--accent);
+  color: white;
+}
+
+.progress-step.done {
+  background: var(--success);
+  color: white;
+}
+
+.progress-step .step-icon {
+  font-size: 14px;
+}
+
+.progress-step.active .step-icon {
+  animation: spin 1s linear infinite;
+}
+
+/* Progress connector line */
+.progress-connector {
+  width: 20px;
+  height: 2px;
+  background: var(--bg-card);
+  transition: background 0.3s ease;
+}
+
+.progress-connector.done {
+  background: var(--success);
 }
 
 /* Controls */

@@ -64,6 +64,26 @@
           <p id="transcription"></p>
         </div>
 
+        <!-- プログレス表示 -->
+        <div id="progress-area" class="hidden">
+          <div id="progress-steps">
+            <div class="progress-step" data-step="parse">
+              <span class="step-icon">🔍</span>
+              <span>解析</span>
+            </div>
+            <div class="progress-connector"></div>
+            <div class="progress-step" data-step="execute">
+              <span class="step-icon">⚡</span>
+              <span>実行</span>
+            </div>
+            <div class="progress-connector"></div>
+            <div class="progress-step" data-step="done">
+              <span class="step-icon">✓</span>
+              <span>完了</span>
+            </div>
+          </div>
+        </div>
+
         <!-- レスポンス -->
         <div id="response-area" class="hidden">
           <p id="response-text"></p>
