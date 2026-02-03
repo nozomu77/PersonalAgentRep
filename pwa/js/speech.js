@@ -25,6 +25,8 @@ export class SpeechEngine {
     this.isWaitingForCommand = false;
     this.commandTimeout = null;
     this._lastFinal = '';
+    this._silenceTimeout = null; // 沈黙検出タイマー
+    this._accumulatedText = '';  // 蓄積テキスト
 
     // コールバック
     this.onWakeWord = null;
@@ -44,6 +46,8 @@ export class SpeechEngine {
   startDirect() {
     this.directMode = true;
     this._lastFinal = '';
+    this._accumulatedText = '';
+    clearTimeout(this._silenceTimeout);
     this._start();
     this.onStateChange?.('activated');
   }
@@ -61,7 +65,9 @@ export class SpeechEngine {
     if (!this.isListening) return;
     this.isListening = false;
     this.isWaitingForCommand = false;
+    this._accumulatedText = '';
     clearTimeout(this.commandTimeout);
+    clearTimeout(this._silenceTimeout);
     try { this.recognition.stop(); } catch (e) { /* ignore */ }
     this.onStateChange?.('idle');
   }
@@ -102,13 +108,15 @@ export class SpeechEngine {
       // 確定結果を処理
       if (finalTranscript) {
         this._lastFinal = finalTranscript;
-        this.onInterim?.(finalTranscript);
 
         if (this.directMode) {
-          // ダイレクトモード: 確定テキストをそのままコマンドとして送信
-          this._deliverCommand(finalTranscript);
+          // ダイレクトモード: テキストを蓄積し、沈黙後に送信
+          this._accumulatedText += (this._accumulatedText ? ' ' : '') + finalTranscript;
+          this.onInterim?.(this._accumulatedText);
+          this._scheduleSilenceCheck();
         } else {
           // ウェイクワードモード
+          this.onInterim?.(finalTranscript);
           this._processWithWakeWord(finalTranscript);
         }
       }
@@ -126,11 +134,12 @@ export class SpeechEngine {
     this.recognition.onend = () => {
       if (this.isListening) {
         if (this.directMode) {
-          // ダイレクトモード: 認識終了で最後のテキストを送信
-          if (this._lastFinal) {
-            // onresultで既に送信済み
+          // ダイレクトモード: 認識終了時、蓄積テキストがあれば送信
+          if (this._accumulatedText) {
+            clearTimeout(this._silenceTimeout);
+            this._deliverCommand(this._accumulatedText);
+            this._accumulatedText = '';
           }
-          // 停止状態に戻す
           this.isListening = false;
           this.onStateChange?.('idle');
         } else {
@@ -139,6 +148,21 @@ export class SpeechEngine {
         }
       }
     };
+  }
+
+  // 沈黙を検出してコマンド送信をスケジュール
+  _scheduleSilenceCheck() {
+    clearTimeout(this._silenceTimeout);
+    // 1.5秒間新しい音声がなければコマンド送信
+    this._silenceTimeout = setTimeout(() => {
+      if (this._accumulatedText && this.isListening) {
+        const text = this._accumulatedText;
+        this._accumulatedText = '';
+        this._deliverCommand(text);
+        // 認識を停止
+        try { this.recognition.stop(); } catch (e) { /* ignore */ }
+      }
+    }, 1500);
   }
 
   _restart() {
