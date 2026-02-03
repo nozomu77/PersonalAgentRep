@@ -91,6 +91,9 @@
 
         <!-- クイックアクション -->
         <div id="quick-actions">
+          <button class="quick-btn" id="btn-reminder">
+            <span class="icon">⏰</span>リマインダー
+          </button>
           <button class="quick-btn" data-cmd="領収書">
             <span class="icon">🧾</span>領収書
           </button>
@@ -127,6 +130,41 @@
         <div id="confirm-buttons">
           <button id="btn-confirm-cancel" class="confirm-btn cancel">キャンセル</button>
           <button id="btn-confirm-ok" class="confirm-btn ok">実行</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- リマインダーダイアログ -->
+    <div id="reminder-overlay" class="hidden">
+      <div id="reminder-dialog">
+        <h3>⏰ リマインダー作成</h3>
+
+        <label class="reminder-label">内容</label>
+        <div class="reminder-input-row">
+          <input type="text" id="reminder-title" placeholder="何をリマインドしますか？">
+          <button id="btn-reminder-voice" class="reminder-voice-btn">🎤</button>
+        </div>
+        <p id="reminder-voice-status" class="reminder-hint"></p>
+
+        <label class="reminder-label">いつ？</label>
+        <div class="reminder-time-presets">
+          <button class="time-preset" data-minutes="10">10分後</button>
+          <button class="time-preset" data-minutes="30">30分後</button>
+          <button class="time-preset" data-minutes="60">1時間後</button>
+          <button class="time-preset" data-minutes="180">3時間後</button>
+          <button class="time-preset" data-minutes="tomorrow9">明日9時</button>
+          <button class="time-preset" data-minutes="custom">カスタム</button>
+        </div>
+
+        <div id="reminder-custom-time" class="hidden">
+          <input type="datetime-local" id="reminder-datetime">
+        </div>
+
+        <p id="reminder-selected-time" class="reminder-time-display"></p>
+
+        <div class="reminder-buttons">
+          <button id="btn-reminder-cancel" class="confirm-btn cancel">キャンセル</button>
+          <button id="btn-reminder-create" class="confirm-btn ok">作成</button>
         </div>
       </div>
     </div>

@@ -70,6 +70,19 @@ const dom = {
   confirmBody: $('#confirm-body'),
   btnConfirmOk: $('#btn-confirm-ok'),
   btnConfirmCancel: $('#btn-confirm-cancel'),
+
+  // Reminder Dialog
+  btnReminder: $('#btn-reminder'),
+  reminderOverlay: $('#reminder-overlay'),
+  reminderTitle: $('#reminder-title'),
+  btnReminderVoice: $('#btn-reminder-voice'),
+  reminderVoiceStatus: $('#reminder-voice-status'),
+  reminderTimePresets: $$('.time-preset'),
+  reminderCustomTime: $('#reminder-custom-time'),
+  reminderDatetime: $('#reminder-datetime'),
+  reminderSelectedTime: $('#reminder-selected-time'),
+  btnReminderCancel: $('#btn-reminder-cancel'),
+  btnReminderCreate: $('#btn-reminder-create'),
 };
 
 // ============================================
@@ -87,6 +100,7 @@ let waveAnimId = null;
 document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initHome();
+  initReminderDialog();
   initSettings();
   initAuthModule();
   renderHistory();
@@ -175,6 +189,246 @@ function initHome() {
       if (cmd) processCommand(cmd);
     });
   });
+}
+
+// ============================================
+// リマインダーダイアログ
+// ============================================
+
+let reminderSelectedMinutes = null;
+let reminderVoiceRecognition = null;
+
+function initReminderDialog() {
+  // リマインダーボタン
+  dom.btnReminder.addEventListener('click', () => {
+    haptic();
+    openReminderDialog();
+  });
+
+  // 音声入力ボタン
+  dom.btnReminderVoice.addEventListener('click', () => {
+    haptic('medium');
+    toggleReminderVoice();
+  });
+
+  // 時間プリセットボタン
+  dom.reminderTimePresets.forEach(btn => {
+    btn.addEventListener('click', () => {
+      haptic();
+      selectTimePreset(btn);
+    });
+  });
+
+  // キャンセルボタン
+  dom.btnReminderCancel.addEventListener('click', () => {
+    haptic();
+    closeReminderDialog();
+  });
+
+  // 作成ボタン
+  dom.btnReminderCreate.addEventListener('click', () => {
+    haptic('medium');
+    createReminder();
+  });
+
+  // カスタム日時変更
+  dom.reminderDatetime.addEventListener('change', () => {
+    updateSelectedTimeDisplay();
+  });
+}
+
+function openReminderDialog() {
+  // リセット
+  dom.reminderTitle.value = '';
+  dom.reminderVoiceStatus.textContent = '';
+  dom.reminderSelectedTime.textContent = '';
+  reminderSelectedMinutes = null;
+  dom.reminderTimePresets.forEach(btn => btn.classList.remove('selected'));
+  dom.reminderCustomTime.classList.add('hidden');
+
+  // デフォルトで30分後を選択
+  const defaultBtn = document.querySelector('.time-preset[data-minutes="30"]');
+  if (defaultBtn) {
+    defaultBtn.classList.add('selected');
+    reminderSelectedMinutes = 30;
+    updateSelectedTimeDisplay();
+  }
+
+  dom.reminderOverlay.classList.remove('hidden');
+  dom.reminderTitle.focus();
+}
+
+function closeReminderDialog() {
+  dom.reminderOverlay.classList.add('hidden');
+  stopReminderVoice();
+}
+
+function selectTimePreset(btn) {
+  // 全てのボタンの選択解除
+  dom.reminderTimePresets.forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+
+  const minutes = btn.dataset.minutes;
+
+  if (minutes === 'custom') {
+    dom.reminderCustomTime.classList.remove('hidden');
+    // 現在時刻から1時間後をデフォルトに
+    const defaultTime = new Date(Date.now() + 3600000);
+    dom.reminderDatetime.value = formatDateTimeLocal(defaultTime);
+    reminderSelectedMinutes = 'custom';
+  } else {
+    dom.reminderCustomTime.classList.add('hidden');
+    reminderSelectedMinutes = minutes;
+  }
+
+  updateSelectedTimeDisplay();
+}
+
+function updateSelectedTimeDisplay() {
+  const targetDate = getReminderTargetDate();
+  if (targetDate) {
+    const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    dom.reminderSelectedTime.textContent = `📅 ${targetDate.toLocaleString('ja-JP', options)}`;
+  } else {
+    dom.reminderSelectedTime.textContent = '';
+  }
+}
+
+function getReminderTargetDate() {
+  if (!reminderSelectedMinutes) return null;
+
+  if (reminderSelectedMinutes === 'custom') {
+    const val = dom.reminderDatetime.value;
+    return val ? new Date(val) : null;
+  }
+
+  if (reminderSelectedMinutes === 'tomorrow9') {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    return tomorrow;
+  }
+
+  return new Date(Date.now() + parseInt(reminderSelectedMinutes) * 60000);
+}
+
+function formatDateTimeLocal(date) {
+  const pad = n => n.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toggleReminderVoice() {
+  if (reminderVoiceRecognition) {
+    stopReminderVoice();
+    return;
+  }
+
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    dom.reminderVoiceStatus.textContent = '音声認識に非対応です';
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  reminderVoiceRecognition = new SpeechRecognition();
+  reminderVoiceRecognition.lang = 'ja-JP';
+  reminderVoiceRecognition.continuous = false;
+  reminderVoiceRecognition.interimResults = true;
+
+  reminderVoiceRecognition.onstart = () => {
+    dom.btnReminderVoice.classList.add('recording');
+    dom.reminderVoiceStatus.textContent = '🎤 話してください...';
+  };
+
+  reminderVoiceRecognition.onresult = (e) => {
+    let transcript = '';
+    for (let i = 0; i < e.results.length; i++) {
+      transcript += e.results[i][0].transcript;
+    }
+    dom.reminderTitle.value = transcript;
+
+    if (e.results[e.results.length - 1].isFinal) {
+      dom.reminderVoiceStatus.textContent = '✅ 認識完了';
+      stopReminderVoice();
+    }
+  };
+
+  reminderVoiceRecognition.onerror = (e) => {
+    dom.reminderVoiceStatus.textContent = `エラー: ${e.error}`;
+    stopReminderVoice();
+  };
+
+  reminderVoiceRecognition.onend = () => {
+    stopReminderVoice();
+  };
+
+  reminderVoiceRecognition.start();
+}
+
+function stopReminderVoice() {
+  if (reminderVoiceRecognition) {
+    reminderVoiceRecognition.stop();
+    reminderVoiceRecognition = null;
+  }
+  dom.btnReminderVoice.classList.remove('recording');
+}
+
+async function createReminder() {
+  const title = dom.reminderTitle.value.trim();
+  if (!title) {
+    dom.reminderVoiceStatus.textContent = '⚠️ 内容を入力してください';
+    dom.reminderTitle.focus();
+    return;
+  }
+
+  const targetDate = getReminderTargetDate();
+  if (!targetDate) {
+    dom.reminderVoiceStatus.textContent = '⚠️ 時間を選択してください';
+    return;
+  }
+
+  closeReminderDialog();
+
+  // リマインダー実行
+  setAgentState('processing');
+  showProgress('execute');
+
+  try {
+    let response;
+    if (Due.isEnabled()) {
+      response = Due.createReminder(title, targetDate);
+    } else {
+      // Google Tasksにリマインダーとして追加
+      if (!isAuthenticated()) {
+        throw new Error('Googleアカウントにログインしてください');
+      }
+      response = await Tasks.createTask(title, 'リマインダー', targetDate.toISOString().split('T')[0]);
+    }
+
+    setProgressDone('execute');
+    showProgress('done');
+    setProgressDone('done');
+
+    await sleep(300);
+    hideProgress();
+    showResponse(response);
+    setAgentState('responding');
+    haptic('success');
+
+    addHistory({
+      type: IntentType.SET_REMINDER,
+      rawText: `${title} (${targetDate.toLocaleString('ja-JP')})`,
+      response,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (e) {
+    hideProgress();
+    showResponse(`エラー: ${e.message}`);
+    setAgentState('responding');
+    haptic('error');
+  }
+
+  setTimeout(resetToIdle, 3000);
 }
 
 // ============================================
