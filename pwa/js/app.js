@@ -92,6 +92,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // Web Speech API 非対応チェック
   if (!speech.supported) {
     dom.stateMessage.textContent = 'このブラウザは音声認識に非対応です (Chromeを推奨)';
+    return;
+  }
+
+  // URLパラメータで自動起動
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('listen') === '1' || params.has('listen')) {
+    // 少し待ってから開始（DOMの準備完了を待つ）
+    setTimeout(() => {
+      toggleListening();
+    }, 500);
+    // パラメータをURLから削除（履歴を汚さない）
+    window.history.replaceState({}, '', window.location.pathname);
   }
 });
 
