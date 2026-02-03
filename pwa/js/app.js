@@ -5,8 +5,8 @@
 import { SpeechEngine } from './speech.js';
 import { parseIntent, getIntentLabel, IntentType } from './agent.js';
 import { initAuth, setupTokenClient, signIn, signOut, isAuthenticated } from './auth.js';
-import { Calendar, Tasks, Drive } from './google-services.js';
-import { Translate, Timer, Notes, Due } from './extra-services.js';
+import { Calendar, Drive } from './google-services.js';
+import { Due } from './extra-services.js';
 
 // ============================================
 // 状態管理
@@ -539,9 +539,7 @@ async function processCommand(text) {
     // 読み取り系は確認不要、書き込み系は確認を挟む
     const needsConfirm = [
       IntentType.CREATE_EVENT,
-      IntentType.CREATE_TASK,
       IntentType.SET_REMINDER,
-      IntentType.SAVE_NOTE,
     ].includes(intent.type);
 
     if (needsConfirm) {
@@ -667,15 +665,6 @@ function buildConfirmSummary(intent, rawText) {
           { label: '時間', value: p.time || '09:00 (デフォルト)' },
         ],
       };
-    case IntentType.CREATE_TASK:
-      return {
-        title: 'タスクを作成',
-        message: `タスク作成: ${p.title || rawText}`,
-        rows: [
-          { label: 'タスク名', value: p.title || rawText },
-          { label: 'メモ', value: p.notes || '(なし)' },
-        ],
-      };
     case IntentType.SET_REMINDER:
       return {
         title: 'リマインダーを作成',
@@ -683,14 +672,6 @@ function buildConfirmSummary(intent, rawText) {
         rows: [
           { label: '内容', value: p.title || rawText },
           { label: '日付', value: dateName[p.date] || p.date || '(未指定)' },
-        ],
-      };
-    case IntentType.SAVE_NOTE:
-      return {
-        title: 'メモを保存',
-        message: `メモ: ${p.content || rawText}`,
-        rows: [
-          { label: '内容', value: p.content || rawText },
         ],
       };
     default:
@@ -764,49 +745,31 @@ async function executeIntent(intent, rawText) {
   try {
     // Google認証不要の機能
     switch (intent.type) {
-      case IntentType.TRANSLATE:
-        response = await Translate.translate(
-          intent.params.text || rawText,
-          intent.params.targetLang || 'en'
-        );
-        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
-
-      case IntentType.SET_TIMER:
-        response = Timer.setTimer(intent.params.seconds || 180, () => {
-          showResponse('タイマーが終了しました！');
-        });
-        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
-
-      case IntentType.SAVE_NOTE:
-        response = Notes.saveNote(intent.params.content || rawText);
-        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
-
-      case IntentType.LIST_NOTES:
-        response = Notes.listNotes();
-        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
-
       case IntentType.HELP:
         response = `使える機能一覧:
 
 【Google連携】※要ログイン
 ・予定作成「明日10時に会議」
 ・予定確認「今日の予定」
-・タスク作成「〇〇をタスクに追加」
-・タスク確認「タスク一覧」
 ・領収書登録「領収書」「レシート」
 
 【Due連携】※要Due設定
-・リマインダー「〇〇をリマインド」
-
-【その他】※ログイン不要
-・翻訳「〇〇を英語に」
-・タイマー「3分タイマー」
-・メモ「〇〇をメモ」「メモ一覧」`;
+・リマインダー「〇〇をリマインド」`;
         return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
 
       case IntentType.CAPTURE_RECEIPT:
         // カメラ起動して領収書撮影 → Google Driveにアップロード
         response = await captureAndUploadReceipt();
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.SET_REMINDER:
+        // Due連携のみ
+        if (!Due.isEnabled()) {
+          response = '設定でDue連携をONにしてください';
+          return { type: intent.type, rawText, response, success: false, timestamp: new Date().toISOString() };
+        }
+        const reminderDate = resolveReminderDate(intent.params.date, intent.params.time);
+        response = Due.createReminder(intent.params.title || rawText, reminderDate);
         return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
     }
 
@@ -832,27 +795,6 @@ async function executeIntent(intent, rawText) {
 
       case IntentType.CHECK_SCHEDULE:
         response = await Calendar.getEvents(intent.params.date || 'today');
-        break;
-
-      case IntentType.CREATE_TASK:
-        response = await Tasks.createTask(
-          intent.params.title || rawText,
-          intent.params.notes || ''
-        );
-        break;
-
-      case IntentType.LIST_TASKS:
-        response = await Tasks.getTasks();
-        break;
-
-      case IntentType.SET_REMINDER:
-        // Due連携のみ
-        if (!Due.isEnabled()) {
-          response = '設定でDue連携をONにしてください';
-          return { type: intent.type, rawText, response, success: false, timestamp: new Date().toISOString() };
-        }
-        const reminderDate = resolveReminderDate(intent.params.date, intent.params.time);
-        response = Due.createReminder(intent.params.title || rawText, reminderDate);
         break;
 
       default:

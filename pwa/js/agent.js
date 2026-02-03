@@ -6,13 +6,7 @@
 export const IntentType = {
   CREATE_EVENT: 'create_event',
   CHECK_SCHEDULE: 'check_schedule',
-  CREATE_TASK: 'create_task',
-  LIST_TASKS: 'list_tasks',
   SET_REMINDER: 'set_reminder',
-  TRANSLATE: 'translate',
-  SET_TIMER: 'set_timer',
-  SAVE_NOTE: 'save_note',
-  LIST_NOTES: 'list_notes',
   CAPTURE_RECEIPT: 'capture_receipt',
   HELP: 'help',
   UNKNOWN: 'unknown',
@@ -21,13 +15,7 @@ export const IntentType = {
 const IntentLabels = {
   [IntentType.CREATE_EVENT]: '予定作成',
   [IntentType.CHECK_SCHEDULE]: '予定確認',
-  [IntentType.CREATE_TASK]: 'タスク作成',
-  [IntentType.LIST_TASKS]: 'タスク一覧',
   [IntentType.SET_REMINDER]: 'リマインダー',
-  [IntentType.TRANSLATE]: '翻訳',
-  [IntentType.SET_TIMER]: 'タイマー',
-  [IntentType.SAVE_NOTE]: 'メモ保存',
-  [IntentType.LIST_NOTES]: 'メモ一覧',
   [IntentType.CAPTURE_RECEIPT]: '領収書登録',
   [IntentType.HELP]: 'ヘルプ',
   [IntentType.UNKNOWN]: '不明',
@@ -98,57 +86,9 @@ function parseWithRules(text) {
     };
   }
 
-  // タスク一覧
-  if (containsAny(n, ['タスク一覧', 'タスクを見', 'やること一覧', 'タスク確認', 'タスクを確認'])) {
-    return { type: IntentType.LIST_TASKS, params: {} };
-  }
-
-  // タスク作成
-  if (containsAny(n, ['タスク', 'やること', 'todo', '追加して', '登録して'])) {
-    return {
-      type: IntentType.CREATE_TASK,
-      params: {
-        title: extractTaskTitle(text),
-        notes: '',
-      },
-    };
-  }
-
-  // 翻訳
-  if (containsAny(n, ['翻訳', '英語に', '日本語に', '通訳', '英訳', '和訳'])) {
-    return {
-      type: IntentType.TRANSLATE,
-      params: {
-        text: extractTranslateText(text),
-        targetLang: extractTargetLang(text),
-      },
-    };
-  }
-
-  // タイマー
-  if (containsAny(n, ['タイマー', '分後', '秒後', '時間後', 'アラーム', 'カウントダウン'])) {
-    return {
-      type: IntentType.SET_TIMER,
-      params: { seconds: extractTimerSeconds(text) },
-    };
-  }
-
-  // メモ一覧
-  if (containsAny(n, ['メモ一覧', 'メモを見', 'メモ確認', 'メモを確認', 'ノート一覧'])) {
-    return { type: IntentType.LIST_NOTES, params: {} };
-  }
-
-  // 領収書登録（メモより先に判定）
+  // 領収書登録
   if (containsAny(n, ['領収書', 'レシート', '経費', '精算'])) {
     return { type: IntentType.CAPTURE_RECEIPT, params: {} };
-  }
-
-  // メモ保存
-  if (containsAny(n, ['メモ', 'ノート', '記録', '書いて', 'めも'])) {
-    return {
-      type: IntentType.SAVE_NOTE,
-      params: { content: extractNoteContent(text) },
-    };
   }
 
   return { type: IntentType.UNKNOWN, params: { rawText: text } };
@@ -164,13 +104,7 @@ async function parseWithOpenAI(text, apiKey) {
 意図の種類:
 - create_event: 予定作成 (title, date, time)
 - check_schedule: 予定確認 (date)
-- create_task: タスク作成 (title, notes)
-- list_tasks: タスク一覧
 - set_reminder: リマインダー (title, date, time)
-- translate: 翻訳 (text, targetLang: ja/en/zh/ko)
-- set_timer: タイマー (seconds)
-- save_note: メモ保存 (content)
-- list_notes: メモ一覧
 - capture_receipt: 領収書登録
 - unknown: 不明
 
@@ -291,66 +225,3 @@ function extractReminderTitle(text) {
   return text;
 }
 
-function extractTaskTitle(text) {
-  const m1 = text.match(/「(.+?)」/);
-  if (m1) return m1[1];
-
-  const m2 = text.match(/(.+?)を(?:タスク|追加|登録)/);
-  if (m2) {
-    const r = m2[1].trim();
-    if (r && !['タスク', '追加', '登録'].includes(r)) return r;
-  }
-  return text;
-}
-
-// 翻訳テキスト抽出
-function extractTranslateText(text) {
-  const m1 = text.match(/「(.+?)」/);
-  if (m1) return m1[1];
-
-  const m2 = text.match(/(.+?)を(?:翻訳|英語|日本語|英訳|和訳)/);
-  if (m2) return m2[1].trim();
-
-  return text.replace(/翻訳|英語に|日本語に|して/g, '').trim();
-}
-
-// 翻訳先言語抽出
-function extractTargetLang(text) {
-  if (containsAny(text, ['日本語', '和訳'])) return 'ja';
-  if (containsAny(text, ['英語', '英訳'])) return 'en';
-  if (containsAny(text, ['中国語'])) return 'zh';
-  if (containsAny(text, ['韓国語'])) return 'ko';
-  return 'en'; // デフォルト英語
-}
-
-// タイマー秒数抽出
-function extractTimerSeconds(text) {
-  const normalized = text.replace(/[０-９]/g, c =>
-    String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
-  );
-
-  const mHour = normalized.match(/(\d+)\s*時間/);
-  const mMin = normalized.match(/(\d+)\s*分/);
-  const mSec = normalized.match(/(\d+)\s*秒/);
-
-  let total = 0;
-  if (mHour) total += parseInt(mHour[1]) * 3600;
-  if (mMin) total += parseInt(mMin[1]) * 60;
-  if (mSec) total += parseInt(mSec[1]);
-
-  return total || 180; // デフォルト3分
-}
-
-// メモ内容抽出
-function extractNoteContent(text) {
-  const m1 = text.match(/「(.+?)」/);
-  if (m1) return m1[1];
-
-  const m2 = text.match(/(?:メモ|ノート|記録)[：:\s]*(.+)/);
-  if (m2) return m2[1].trim();
-
-  const m3 = text.match(/(.+?)を(?:メモ|ノート|記録)/);
-  if (m3) return m3[1].trim();
-
-  return text.replace(/メモ|ノート|記録|して|書いて/g, '').trim();
-}

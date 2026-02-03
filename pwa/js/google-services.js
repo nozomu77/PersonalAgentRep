@@ -1,5 +1,5 @@
 // ============================================
-// Google API サービス (Calendar / Tasks / Drive)
+// Google API サービス (Calendar / Drive)
 // ============================================
 
 import { getAccessToken } from './auth.js';
@@ -139,65 +139,6 @@ export const Calendar = {
         time = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
       }
       summary += `${i + 1}. ${time} ${title}\n`;
-    });
-
-    return summary;
-  },
-};
-
-// ============================================
-// Google Tasks サービス
-// ============================================
-
-let cachedTaskListId = null;
-
-async function getDefaultTaskListId() {
-  if (cachedTaskListId) return cachedTaskListId;
-
-  const data = await apiRequest('https://tasks.googleapis.com/tasks/v1/users/@me/lists');
-  const lists = data.items || [];
-  if (lists.length === 0) throw new Error('タスクリストが見つかりません');
-
-  cachedTaskListId = lists[0].id;
-  return cachedTaskListId;
-}
-
-export const Tasks = {
-  async createTask(title, notes = '', dueDate = null) {
-    const listId = await getDefaultTaskListId();
-
-    const task = { title };
-    if (notes) task.notes = notes;
-    if (dueDate) {
-      const d = resolveDate(dueDate);
-      task.due = d.toISOString();
-    }
-
-    await apiRequest(`https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks`, {
-      method: 'POST',
-      body: JSON.stringify(task),
-    });
-
-    return `タスク「${title}」を追加しました`;
-  },
-
-  async getTasks() {
-    const listId = await getDefaultTaskListId();
-
-    const data = await apiRequest(
-      `https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks?showCompleted=false&maxResults=20`
-    );
-
-    const tasks = data.items || [];
-
-    if (tasks.length === 0) {
-      return '未完了のタスクはありません';
-    }
-
-    let summary = `タスクが${tasks.length}件あります:\n`;
-    tasks.forEach((t, i) => {
-      const title = t.title || '(タイトルなし)';
-      summary += `${i + 1}. ${title}\n`;
     });
 
     return summary;
