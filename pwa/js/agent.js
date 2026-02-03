@@ -9,9 +9,7 @@ export const IntentType = {
   CREATE_TASK: 'create_task',
   LIST_TASKS: 'list_tasks',
   SET_REMINDER: 'set_reminder',
-  WEB_SEARCH: 'web_search',
   TRANSLATE: 'translate',
-  CALCULATE: 'calculate',
   SET_TIMER: 'set_timer',
   SAVE_NOTE: 'save_note',
   LIST_NOTES: 'list_notes',
@@ -26,9 +24,7 @@ const IntentLabels = {
   [IntentType.CREATE_TASK]: 'タスク作成',
   [IntentType.LIST_TASKS]: 'タスク一覧',
   [IntentType.SET_REMINDER]: 'リマインダー',
-  [IntentType.WEB_SEARCH]: 'ウェブ検索',
   [IntentType.TRANSLATE]: '翻訳',
-  [IntentType.CALCULATE]: '計算',
   [IntentType.SET_TIMER]: 'タイマー',
   [IntentType.SAVE_NOTE]: 'メモ保存',
   [IntentType.LIST_NOTES]: 'メモ一覧',
@@ -118,14 +114,6 @@ function parseWithRules(text) {
     };
   }
 
-  // ウェブ検索
-  if (containsAny(n, ['検索', '調べて', 'ググ', '探して', 'サーチ'])) {
-    return {
-      type: IntentType.WEB_SEARCH,
-      params: { query: extractSearchQuery(text) },
-    };
-  }
-
   // 翻訳
   if (containsAny(n, ['翻訳', '英語に', '日本語に', '通訳', '英訳', '和訳'])) {
     return {
@@ -134,15 +122,6 @@ function parseWithRules(text) {
         text: extractTranslateText(text),
         targetLang: extractTargetLang(text),
       },
-    };
-  }
-
-  // 計算
-  if (containsAny(n, ['計算', '足し', '引き', '掛け', '割り', 'いくら', 'いくつ', '何%', '何パーセント']) ||
-      /[\d０-９]+\s*[+\-×÷*/＋−×÷]\s*[\d０-９]+/.test(n)) {
-    return {
-      type: IntentType.CALCULATE,
-      params: { expression: extractMathExpression(text) },
     };
   }
 
@@ -188,9 +167,7 @@ async function parseWithOpenAI(text, apiKey) {
 - create_task: タスク作成 (title, notes)
 - list_tasks: タスク一覧
 - set_reminder: リマインダー (title, date, time)
-- web_search: ウェブ検索 (query)
 - translate: 翻訳 (text, targetLang: ja/en/zh/ko)
-- calculate: 計算 (expression)
 - set_timer: タイマー (seconds)
 - save_note: メモ保存 (content)
 - list_notes: メモ一覧
@@ -326,20 +303,6 @@ function extractTaskTitle(text) {
   return text;
 }
 
-// 検索クエリ抽出
-function extractSearchQuery(text) {
-  const m1 = text.match(/「(.+?)」/);
-  if (m1) return m1[1];
-
-  const m2 = text.match(/(.+?)(?:を|について|で)(?:検索|調べ|ググ|探)/);
-  if (m2) return m2[1].trim();
-
-  const m3 = text.match(/(?:検索|調べて|ググって)[：:\s]*(.+)/);
-  if (m3) return m3[1].trim();
-
-  return text.replace(/検索|調べて|ググって|探して/g, '').trim();
-}
-
 // 翻訳テキスト抽出
 function extractTranslateText(text) {
   const m1 = text.match(/「(.+?)」/);
@@ -358,22 +321,6 @@ function extractTargetLang(text) {
   if (containsAny(text, ['中国語'])) return 'zh';
   if (containsAny(text, ['韓国語'])) return 'ko';
   return 'en'; // デフォルト英語
-}
-
-// 数式抽出
-function extractMathExpression(text) {
-  // 全角を半角に
-  let expr = text
-    .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
-    .replace(/＋/g, '+').replace(/−/g, '-').replace(/×/g, '*').replace(/÷/g, '/')
-    .replace(/掛ける/g, '*').replace(/割る/g, '/').replace(/足す/g, '+').replace(/引く/g, '-')
-    .replace(/プラス/g, '+').replace(/マイナス/g, '-');
-
-  // 数式部分を抽出
-  const m = expr.match(/[\d.]+\s*[+\-*/]\s*[\d.]+(?:\s*[+\-*/]\s*[\d.]+)*/);
-  if (m) return m[0];
-
-  return expr.replace(/計算|して|は|いくつ|いくら/g, '').trim();
 }
 
 // タイマー秒数抽出

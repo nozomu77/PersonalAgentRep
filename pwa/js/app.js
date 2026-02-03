@@ -6,7 +6,7 @@ import { SpeechEngine } from './speech.js';
 import { parseIntent, getIntentLabel, IntentType } from './agent.js';
 import { initAuth, setupTokenClient, signIn, signOut, isAuthenticated } from './auth.js';
 import { Calendar, Tasks, Drive } from './google-services.js';
-import { WebSearch, Translate, Calculator, Timer, Notes, Due } from './extra-services.js';
+import { Translate, Timer, Notes, Due } from './extra-services.js';
 
 // ============================================
 // 状態管理
@@ -764,19 +764,11 @@ async function executeIntent(intent, rawText) {
   try {
     // Google認証不要の機能
     switch (intent.type) {
-      case IntentType.WEB_SEARCH:
-        response = WebSearch.search(intent.params.query || rawText);
-        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
-
       case IntentType.TRANSLATE:
         response = await Translate.translate(
           intent.params.text || rawText,
           intent.params.targetLang || 'en'
         );
-        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
-
-      case IntentType.CALCULATE:
-        response = Calculator.calculate(intent.params.expression || rawText);
         return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
 
       case IntentType.SET_TIMER:
@@ -801,13 +793,13 @@ async function executeIntent(intent, rawText) {
 ・予定確認「今日の予定」
 ・タスク作成「〇〇をタスクに追加」
 ・タスク確認「タスク一覧」
-・リマインダー「〇〇をリマインド」
 ・領収書登録「領収書」「レシート」
 
+【Due連携】※要Due設定
+・リマインダー「〇〇をリマインド」
+
 【その他】※ログイン不要
-・検索「〇〇を検索」
 ・翻訳「〇〇を英語に」
-・計算「100+200」
 ・タイマー「3分タイマー」
 ・メモ「〇〇をメモ」「メモ一覧」`;
         return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };

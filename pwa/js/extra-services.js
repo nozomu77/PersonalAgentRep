@@ -1,19 +1,6 @@
 // ============================================
-// 追加機能サービス (検索, 翻訳, 計算, タイマー, メモ, Due連携)
+// 追加機能サービス (翻訳, タイマー, メモ, Due連携)
 // ============================================
-
-// ============================================
-// ウェブ検索サービス
-// ============================================
-
-export const WebSearch = {
-  search(query) {
-    // Google検索を開く
-    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-    window.open(url, '_blank');
-    return `「${query}」をGoogleで検索しました`;
-  },
-};
 
 // ============================================
 // 翻訳サービス (MyMemory API - 無料)
@@ -45,111 +32,6 @@ export const Translate = {
     }
 
     throw new Error('翻訳に失敗しました');
-  },
-};
-
-// ============================================
-// 計算サービス (安全なパーサーベース実装)
-// ============================================
-
-// 再帰下降パーサーで安全に数式を評価
-function safeEvaluate(expr) {
-  const tokens = tokenize(expr);
-  let pos = 0;
-
-  function peek() { return tokens[pos]; }
-  function consume() { return tokens[pos++]; }
-
-  // expr = term (('+' | '-') term)*
-  function parseExpr() {
-    let left = parseTerm();
-    while (peek() === '+' || peek() === '-') {
-      const op = consume();
-      const right = parseTerm();
-      left = op === '+' ? left + right : left - right;
-    }
-    return left;
-  }
-
-  // term = factor (('*' | '/') factor)*
-  function parseTerm() {
-    let left = parseFactor();
-    while (peek() === '*' || peek() === '/') {
-      const op = consume();
-      const right = parseFactor();
-      if (op === '/' && right === 0) throw new Error('Division by zero');
-      left = op === '*' ? left * right : left / right;
-    }
-    return left;
-  }
-
-  // factor = number | '(' expr ')' | '-' factor
-  function parseFactor() {
-    const token = peek();
-    if (token === '-') {
-      consume();
-      return -parseFactor();
-    }
-    if (token === '(') {
-      consume(); // '('
-      const result = parseExpr();
-      if (peek() !== ')') throw new Error('Missing )');
-      consume(); // ')'
-      return result;
-    }
-    if (typeof token === 'number') {
-      consume();
-      return token;
-    }
-    throw new Error('Unexpected token');
-  }
-
-  const result = parseExpr();
-  if (pos < tokens.length) throw new Error('Unexpected token');
-  return result;
-}
-
-function tokenize(expr) {
-  const tokens = [];
-  let i = 0;
-  while (i < expr.length) {
-    const c = expr[i];
-    if (/\s/.test(c)) { i++; continue; }
-    if (/[+\-*/()]/.test(c)) { tokens.push(c); i++; continue; }
-    if (/[\d.]/.test(c)) {
-      let num = '';
-      while (i < expr.length && /[\d.]/.test(expr[i])) { num += expr[i++]; }
-      tokens.push(parseFloat(num));
-      continue;
-    }
-    throw new Error('Invalid character');
-  }
-  return tokens;
-}
-
-export const Calculator = {
-  calculate(expression) {
-    // 数字と演算子のみ許可
-    const sanitized = expression.replace(/[^0-9+\-*/().%\s]/g, '');
-
-    if (!sanitized || sanitized.trim() === '') {
-      return '計算式を認識できませんでした';
-    }
-
-    try {
-      // % を /100 に変換
-      const expr = sanitized.replace(/(\d+)%/g, '($1/100)');
-      const result = safeEvaluate(expr);
-
-      if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
-        const formatted = Number.isInteger(result) ? result : result.toFixed(6).replace(/\.?0+$/, '');
-        return `${expression} = ${formatted}`;
-      }
-    } catch {
-      // 計算エラー
-    }
-
-    return `「${expression}」を計算できませんでした`;
   },
 };
 
