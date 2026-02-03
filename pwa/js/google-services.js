@@ -1,5 +1,5 @@
 // ============================================
-// Google API サービス (Gmail / Calendar / Tasks)
+// Google API サービス (Calendar / Tasks / Drive)
 // ============================================
 
 import { getAccessToken } from './auth.js';
@@ -70,66 +70,6 @@ function toISOStringWithTZ(date) {
   const om = pad(Math.abs(offset) % 60);
   return `${yyyy}-${MM}-${dd}T${hh}:${mm}:${ss}${sign}${oh}:${om}`;
 }
-
-// ============================================
-// Gmail サービス
-// ============================================
-
-export const Gmail = {
-  async sendEmail(to, subject, body) {
-    // RFC 2822 形式のメール
-    const email = [
-      `To: ${to}`,
-      `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
-      'Content-Type: text/plain; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      btoa(unescape(encodeURIComponent(body))),
-    ].join('\r\n');
-
-    // Base64url エンコード
-    const raw = btoa(unescape(encodeURIComponent(email)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    await apiRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-      method: 'POST',
-      body: JSON.stringify({ raw }),
-    });
-
-    return `メールを ${to} に送信しました`;
-  },
-
-  async getUnreadEmails(maxResults = 5) {
-    const list = await apiRequest(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread&maxResults=${maxResults}`
-    );
-
-    if (!list.messages || list.messages.length === 0) {
-      return '未読メールはありません';
-    }
-
-    // 各メッセージの詳細を取得
-    const details = await Promise.all(
-      list.messages.slice(0, maxResults).map(msg =>
-        apiRequest(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`
-        )
-      )
-    );
-
-    let summary = `未読メールが${details.length}件あります:\n`;
-    details.forEach((msg, i) => {
-      const headers = msg.payload?.headers || [];
-      const from = headers.find(h => h.name.toLowerCase() === 'from')?.value || '不明';
-      const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '(件名なし)';
-      summary += `${i + 1}. ${from} - ${subject}\n`;
-    });
-
-    return summary;
-  },
-};
 
 // ============================================
 // Google Calendar サービス

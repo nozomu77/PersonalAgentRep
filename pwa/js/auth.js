@@ -3,13 +3,11 @@
 // ============================================
 
 const SCOPES = [
-  'https://www.googleapis.com/auth/gmail.send',
-  'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/tasks',
   'https://www.googleapis.com/auth/tasks.readonly',
-  'https://www.googleapis.com/auth/drive.file', // 領収書アップロード用
+  'https://www.googleapis.com/auth/drive.file',
 ].join(' ');
 
 let tokenClient = null;

@@ -5,8 +5,8 @@
 import { SpeechEngine } from './speech.js';
 import { parseIntent, getIntentLabel, IntentType } from './agent.js';
 import { initAuth, setupTokenClient, signIn, signOut, isAuthenticated } from './auth.js';
-import { Gmail, Calendar, Tasks, Drive } from './google-services.js';
-import { Weather, WebSearch, Translate, Calculator, News, Timer, Notes, Due } from './extra-services.js';
+import { Calendar, Tasks, Drive } from './google-services.js';
+import { WebSearch, Translate, Calculator, Timer, Notes, Due } from './extra-services.js';
 
 // ============================================
 // 状態管理
@@ -54,7 +54,6 @@ const dom = {
   btnSaveClientId: $('#btn-save-client-id'),
   btnGoogleAuth: $('#btn-google-auth'),
   authMessage: $('#auth-message'),
-  inputWakeword: $('#input-wakeword'),
   toggleDue: $('#toggle-due'),
   inputDriveFolder: $('#input-drive-folder'),
   btnSaveDriveFolder: $('#btn-save-drive-folder'),
@@ -288,7 +287,6 @@ async function processCommand(text) {
 
     // 読み取り系は確認不要、書き込み系は確認を挟む
     const needsConfirm = [
-      IntentType.SEND_EMAIL,
       IntentType.CREATE_EVENT,
       IntentType.CREATE_TASK,
       IntentType.SET_REMINDER,
@@ -408,16 +406,6 @@ function buildConfirmSummary(intent, rawText) {
   const dateName = { today: '今日', tomorrow: '明日', day_after_tomorrow: '明後日' };
 
   switch (intent.type) {
-    case IntentType.SEND_EMAIL:
-      return {
-        title: 'メール送信',
-        message: `メール送信: ${p.to || '(宛先未指定)'} / 件名: ${p.subject || '(なし)'}`,
-        rows: [
-          { label: '宛先', value: p.to || '(未指定)' },
-          { label: '件名', value: p.subject || '(なし)' },
-          { label: '本文', value: p.body || '(なし)' },
-        ],
-      };
     case IntentType.CREATE_EVENT:
       return {
         title: '予定を作成',
@@ -525,10 +513,6 @@ async function executeIntent(intent, rawText) {
   try {
     // Google認証不要の機能
     switch (intent.type) {
-      case IntentType.WEATHER:
-        response = await Weather.getWeather(intent.params.location || '東京');
-        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
-
       case IntentType.WEB_SEARCH:
         response = WebSearch.search(intent.params.query || rawText);
         return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
@@ -542,10 +526,6 @@ async function executeIntent(intent, rawText) {
 
       case IntentType.CALCULATE:
         response = Calculator.calculate(intent.params.expression || rawText);
-        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
-
-      case IntentType.NEWS:
-        response = await News.getNews(intent.params.category || 'general');
         return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
 
       case IntentType.SET_TIMER:
@@ -566,8 +546,6 @@ async function executeIntent(intent, rawText) {
         response = `使える機能一覧:
 
 【Google連携】※要ログイン
-・メール送信「〇〇にメールして」
-・メール確認「未読メール確認」
 ・予定作成「明日10時に会議」
 ・予定確認「今日の予定」
 ・タスク作成「〇〇をタスクに追加」
@@ -576,11 +554,9 @@ async function executeIntent(intent, rawText) {
 ・領収書登録「領収書」「レシート」
 
 【その他】※ログイン不要
-・天気「東京の天気」「明日の天気」
 ・検索「〇〇を検索」
 ・翻訳「〇〇を英語に」
 ・計算「100+200」
-・ニュース「ニュース」「スポーツニュース」
 ・タイマー「3分タイマー」
 ・メモ「〇〇をメモ」「メモ一覧」`;
         return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
@@ -603,18 +579,6 @@ async function executeIntent(intent, rawText) {
     }
 
     switch (intent.type) {
-      case IntentType.SEND_EMAIL:
-        response = await Gmail.sendEmail(
-          intent.params.to || '',
-          intent.params.subject || '',
-          intent.params.body || ''
-        );
-        break;
-
-      case IntentType.CHECK_EMAIL:
-        response = await Gmail.getUnreadEmails();
-        break;
-
       case IntentType.CREATE_EVENT:
         response = await Calendar.createEvent(
           intent.params.title || rawText,
@@ -681,10 +645,9 @@ function setAgentState(newState) {
   dom.agentIcon.textContent = icons[newState] || '🎤';
 
   // メッセージ更新
-  const wakeWord = localStorage.getItem('wake_word') || 'ヘイエージェント';
   const messages = {
     idle: 'タップして開始',
-    listening: `「${wakeWord}」と話しかけてください`,
+    listening: 'コマンドをどうぞ',
     activated: 'コマンドをどうぞ',
     processing: '処理中...',
     responding: '応答中',
@@ -777,12 +740,6 @@ function initSettings() {
       }
       signIn();
     }
-  });
-
-  // ウェイクワード
-  dom.inputWakeword.value = localStorage.getItem('wake_word') || 'ヘイエージェント';
-  dom.inputWakeword.addEventListener('change', () => {
-    speech.setWakeWord(dom.inputWakeword.value);
   });
 
   // Due連携トグル

@@ -4,40 +4,31 @@
 
 // 意図の種類
 export const IntentType = {
-  SEND_EMAIL: 'send_email',
-  CHECK_EMAIL: 'check_email',
   CREATE_EVENT: 'create_event',
   CHECK_SCHEDULE: 'check_schedule',
   CREATE_TASK: 'create_task',
   LIST_TASKS: 'list_tasks',
   SET_REMINDER: 'set_reminder',
-  // 新機能
-  WEATHER: 'weather',
   WEB_SEARCH: 'web_search',
   TRANSLATE: 'translate',
   CALCULATE: 'calculate',
-  NEWS: 'news',
   SET_TIMER: 'set_timer',
   SAVE_NOTE: 'save_note',
   LIST_NOTES: 'list_notes',
-  CAPTURE_RECEIPT: 'capture_receipt', // 領収書登録
+  CAPTURE_RECEIPT: 'capture_receipt',
   HELP: 'help',
   UNKNOWN: 'unknown',
 };
 
 const IntentLabels = {
-  [IntentType.SEND_EMAIL]: 'メール送信',
-  [IntentType.CHECK_EMAIL]: 'メール確認',
   [IntentType.CREATE_EVENT]: '予定作成',
   [IntentType.CHECK_SCHEDULE]: '予定確認',
   [IntentType.CREATE_TASK]: 'タスク作成',
   [IntentType.LIST_TASKS]: 'タスク一覧',
   [IntentType.SET_REMINDER]: 'リマインダー',
-  [IntentType.WEATHER]: '天気',
   [IntentType.WEB_SEARCH]: 'ウェブ検索',
   [IntentType.TRANSLATE]: '翻訳',
   [IntentType.CALCULATE]: '計算',
-  [IntentType.NEWS]: 'ニュース',
   [IntentType.SET_TIMER]: 'タイマー',
   [IntentType.SAVE_NOTE]: 'メモ保存',
   [IntentType.LIST_NOTES]: 'メモ一覧',
@@ -77,26 +68,6 @@ function parseWithRules(text) {
   // ヘルプ・機能一覧
   if (containsAny(n, ['どんな機能', '何ができる', '使い方', 'ヘルプ', '機能一覧', '何ができ', 'できること', '使える機能'])) {
     return { type: IntentType.HELP, params: {} };
-  }
-
-  // メール送信
-  if (containsAny(n, ['メール', 'メールして', 'メールを送', 'mail', '送信して'])) {
-    if (containsAny(n, ['未読', '確認', 'チェック', '受信', 'を見'])) {
-      return { type: IntentType.CHECK_EMAIL, params: {} };
-    }
-    return {
-      type: IntentType.SEND_EMAIL,
-      params: {
-        to: extractRecipient(text),
-        subject: extractSubject(text),
-        body: extractBody(text),
-      },
-    };
-  }
-
-  // メール確認
-  if (containsAny(n, ['未読', 'メール確認', 'メールチェック', '受信メール', 'メールを見'])) {
-    return { type: IntentType.CHECK_EMAIL, params: {} };
   }
 
   // 予定作成
@@ -147,14 +118,6 @@ function parseWithRules(text) {
     };
   }
 
-  // 天気
-  if (containsAny(n, ['天気', '気温', '降水', '雨', '晴れ', '曇り', '気象'])) {
-    return {
-      type: IntentType.WEATHER,
-      params: { location: extractLocation(text) },
-    };
-  }
-
   // ウェブ検索
   if (containsAny(n, ['検索', '調べて', 'ググ', '探して', 'サーチ'])) {
     return {
@@ -180,14 +143,6 @@ function parseWithRules(text) {
     return {
       type: IntentType.CALCULATE,
       params: { expression: extractMathExpression(text) },
-    };
-  }
-
-  // ニュース
-  if (containsAny(n, ['ニュース', '最新情報', 'ヘッドライン', '話題', 'トピック'])) {
-    return {
-      type: IntentType.NEWS,
-      params: { category: extractNewsCategory(text) },
     };
   }
 
@@ -228,21 +183,18 @@ async function parseWithOpenAI(text, apiKey) {
   const prompt = `ユーザーの発話から意図を解析し、以下のJSON形式で返してください。
 
 意図の種類:
-- send_email: メール送信 (to, subject, body)
-- check_email: メール確認
 - create_event: 予定作成 (title, date, time)
 - check_schedule: 予定確認 (date)
 - create_task: タスク作成 (title, notes)
 - list_tasks: タスク一覧
 - set_reminder: リマインダー (title, date, time)
-- weather: 天気 (location)
 - web_search: ウェブ検索 (query)
 - translate: 翻訳 (text, targetLang: ja/en/zh/ko)
 - calculate: 計算 (expression)
-- news: ニュース (category: general/sports/technology/entertainment/business)
 - set_timer: タイマー (seconds)
 - save_note: メモ保存 (content)
 - list_notes: メモ一覧
+- capture_receipt: 領収書登録
 - unknown: 不明
 
 日付は today/tomorrow/day_after_tomorrow または YYYY-MM-DD 形式。
@@ -290,44 +242,6 @@ JSON形式で返答:`;
 
 function containsAny(text, keywords) {
   return keywords.some(k => text.includes(k));
-}
-
-function extractRecipient(text) {
-  const patterns = [
-    /(.+?)に(?:メール|送信)/,
-    /(.+?)宛て/,
-    /(.+?)へ(?:メール|送信)/,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m && m[1]) return m[1].trim();
-  }
-  return '';
-}
-
-function extractSubject(text) {
-  const patterns = [
-    /件名[はが](.+?)(?:で|、|$)/,
-    /タイトル[はが](.+?)(?:で|、|$)/,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m && m[1]) return m[1].trim();
-  }
-  return '';
-}
-
-function extractBody(text) {
-  const patterns = [
-    /内容[はが](.+?)$/,
-    /本文[はが](.+?)$/,
-    /と伝えて$/,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m && m[1]) return m[1].trim();
-  }
-  return '';
 }
 
 function extractEventTitle(text) {
@@ -412,16 +326,6 @@ function extractTaskTitle(text) {
   return text;
 }
 
-// 天気の場所抽出
-function extractLocation(text) {
-  const m = text.match(/(.+?)(?:の天気|の気温|は[晴曇雨])/);
-  if (m) {
-    const loc = m[1].replace(/今日|明日|明後日/g, '').trim();
-    if (loc) return loc;
-  }
-  return '東京';
-}
-
 // 検索クエリ抽出
 function extractSearchQuery(text) {
   const m1 = text.match(/「(.+?)」/);
@@ -470,15 +374,6 @@ function extractMathExpression(text) {
   if (m) return m[0];
 
   return expr.replace(/計算|して|は|いくつ|いくら/g, '').trim();
-}
-
-// ニュースカテゴリ抽出
-function extractNewsCategory(text) {
-  if (containsAny(text, ['スポーツ', '野球', 'サッカー'])) return 'sports';
-  if (containsAny(text, ['テクノロジー', 'IT', 'テック', '技術'])) return 'technology';
-  if (containsAny(text, ['エンタメ', '芸能', '映画', '音楽'])) return 'entertainment';
-  if (containsAny(text, ['ビジネス', '経済', '株', '金融'])) return 'business';
-  return 'general';
 }
 
 // タイマー秒数抽出
