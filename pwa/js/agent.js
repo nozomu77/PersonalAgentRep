@@ -20,6 +20,7 @@ export const IntentType = {
   SET_TIMER: 'set_timer',
   SAVE_NOTE: 'save_note',
   LIST_NOTES: 'list_notes',
+  CAPTURE_RECEIPT: 'capture_receipt', // 領収書登録
   HELP: 'help',
   UNKNOWN: 'unknown',
 };
@@ -40,6 +41,7 @@ const IntentLabels = {
   [IntentType.SET_TIMER]: 'タイマー',
   [IntentType.SAVE_NOTE]: 'メモ保存',
   [IntentType.LIST_NOTES]: 'メモ一覧',
+  [IntentType.CAPTURE_RECEIPT]: '領収書登録',
   [IntentType.HELP]: 'ヘルプ',
   [IntentType.UNKNOWN]: '不明',
 };
@@ -200,6 +202,11 @@ function parseWithRules(text) {
   // メモ一覧
   if (containsAny(n, ['メモ一覧', 'メモを見', 'メモ確認', 'メモを確認', 'ノート一覧'])) {
     return { type: IntentType.LIST_NOTES, params: {} };
+  }
+
+  // 領収書登録（メモより先に判定）
+  if (containsAny(n, ['領収書', 'レシート', '経費', '精算'])) {
+    return { type: IntentType.CAPTURE_RECEIPT, params: {} };
   }
 
   // メモ保存

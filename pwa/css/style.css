@@ -750,6 +750,53 @@ body.state-listening #transcription {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* Toggle Switch */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.toggle-row input[type="checkbox"] {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  width: 52px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  position: relative;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.toggle-slider::after {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: white;
+  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  transition: all 0.3s ease;
+}
+
+.toggle-row input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle-row input:checked + .toggle-slider::after {
+  transform: translateX(24px);
+}
+
 /* ---- Confirm Dialog ---- */
 #confirm-overlay {
   position: fixed;

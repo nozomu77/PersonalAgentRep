@@ -103,6 +103,9 @@
           <button class="quick-btn" data-cmd="ニュース">
             <span class="icon">📰</span>ニュース
           </button>
+          <button class="quick-btn" data-cmd="領収書">
+            <span class="icon">🧾</span>領収書
+          </button>
           <button class="quick-btn" data-cmd="ヘルプ">
             <span class="icon">❓</span>ヘルプ
           </button>
@@ -122,6 +125,9 @@
           <input type="text" id="input-command" placeholder="コマンドを入力...">
           <button id="btn-send">送信</button>
         </div>
+
+        <!-- カメラ入力（領収書用） -->
+        <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden">
       </div>
     </main>
 
@@ -175,6 +181,22 @@
           <h3>ウェイクワード</h3>
           <input type="text" id="input-wakeword" value="ヘイエージェント" class="settings-input">
           <p class="settings-note">この言葉を話すとエージェントが起動します</p>
+        </section>
+
+        <!-- 外部アプリ連携 -->
+        <section class="settings-section">
+          <h3>外部アプリ連携</h3>
+          <label class="toggle-row">
+            <span>リマインダーにDueアプリを使用</span>
+            <input type="checkbox" id="toggle-due">
+            <span class="toggle-slider"></span>
+          </label>
+          <p class="settings-note">ONにすると「リマインドして」でDueアプリが開きます（iOSのみ）</p>
+
+          <label class="settings-label" style="margin-top: 16px;">領収書保存先 (Google Drive フォルダID)</label>
+          <input type="text" id="input-drive-folder" placeholder="フォルダIDを入力" class="settings-input">
+          <button id="btn-save-drive-folder" class="settings-btn">保存</button>
+          <p class="settings-note">「領収書登録」でカメラ撮影→自動アップロードされます</p>
         </section>
 
         <!-- OpenAI API -->

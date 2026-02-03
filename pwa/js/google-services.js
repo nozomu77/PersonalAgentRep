@@ -263,3 +263,59 @@ export const Tasks = {
     return summary;
   },
 };
+
+// ============================================
+// Google Drive サービス
+// ============================================
+
+export const Drive = {
+  // ファイルをアップロード
+  async uploadFile(file, folderId = null) {
+    const token = getAccessToken();
+
+    // ファイル名を生成（日時ベース）
+    const now = new Date();
+    const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
+    const ext = file.name.split('.').pop() || 'jpg';
+    const fileName = `receipt_${timestamp}.${ext}`;
+
+    // メタデータ
+    const metadata = {
+      name: fileName,
+      mimeType: file.type || 'image/jpeg',
+    };
+
+    // フォルダ指定があれば追加
+    if (folderId) {
+      metadata.parents = [folderId];
+    }
+
+    // multipart/form-data でアップロード
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', file);
+
+    const res = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: form,
+      }
+    );
+
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`アップロード失敗: ${error}`);
+    }
+
+    const data = await res.json();
+    return {
+      id: data.id,
+      name: data.name,
+      message: `領収書を保存しました: ${fileName}`,
+    };
+  },
+};

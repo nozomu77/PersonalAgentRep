@@ -5,8 +5,8 @@
 import { SpeechEngine } from './speech.js';
 import { parseIntent, getIntentLabel, IntentType } from './agent.js';
 import { initAuth, setupTokenClient, signIn, signOut, isAuthenticated } from './auth.js';
-import { Gmail, Calendar, Tasks } from './google-services.js';
-import { Weather, WebSearch, Translate, Calculator, News, Timer, Notes } from './extra-services.js';
+import { Gmail, Calendar, Tasks, Drive } from './google-services.js';
+import { Weather, WebSearch, Translate, Calculator, News, Timer, Notes, Due } from './extra-services.js';
 
 // ============================================
 // 状態管理
@@ -47,6 +47,7 @@ const dom = {
   manualInput: $('#manual-input'),
   inputCommand: $('#input-command'),
   btnSend: $('#btn-send'),
+  cameraInput: $('#camera-input'),
 
   // Settings
   inputClientId: $('#input-client-id'),
@@ -54,6 +55,9 @@ const dom = {
   btnGoogleAuth: $('#btn-google-auth'),
   authMessage: $('#auth-message'),
   inputWakeword: $('#input-wakeword'),
+  toggleDue: $('#toggle-due'),
+  inputDriveFolder: $('#input-drive-folder'),
+  btnSaveDriveFolder: $('#btn-save-drive-folder'),
   inputOpenAIKey: $('#input-openai-key'),
   btnToggleKey: $('#btn-toggle-key'),
   btnSaveKey: $('#btn-save-key'),
@@ -189,6 +193,62 @@ function haptic(style = 'light') {
     };
     navigator.vibrate(patterns[style] || patterns.light);
   }
+}
+
+// ============================================
+// 領収書撮影・アップロード
+// ============================================
+
+function captureAndUploadReceipt() {
+  return new Promise((resolve, reject) => {
+    // Google認証チェック
+    if (!isAuthenticated()) {
+      reject(new Error('Googleアカウントにログインしてください'));
+      return;
+    }
+
+    // フォルダID取得
+    const folderId = localStorage.getItem('drive_receipt_folder') || null;
+
+    // カメラ起動
+    dom.cameraInput.value = ''; // リセット
+    dom.cameraInput.click();
+
+    // ファイル選択時の処理
+    const handleChange = async () => {
+      dom.cameraInput.removeEventListener('change', handleChange);
+
+      const file = dom.cameraInput.files?.[0];
+      if (!file) {
+        resolve('キャンセルされました');
+        return;
+      }
+
+      try {
+        showResponse('アップロード中...');
+        const result = await Drive.uploadFile(file, folderId);
+        haptic('success');
+        resolve(result.message);
+      } catch (e) {
+        haptic('error');
+        reject(e);
+      }
+    };
+
+    dom.cameraInput.addEventListener('change', handleChange);
+
+    // キャンセル検出（フォーカスが戻ってきたら）
+    const handleFocus = () => {
+      setTimeout(() => {
+        window.removeEventListener('focus', handleFocus);
+        if (!dom.cameraInput.files?.length) {
+          dom.cameraInput.removeEventListener('change', handleChange);
+          resolve('キャンセルされました');
+        }
+      }, 500);
+    };
+    window.addEventListener('focus', handleFocus);
+  });
 }
 
 function toggleListening() {
@@ -432,6 +492,33 @@ function showConfirmDialog(title, rows) {
   });
 }
 
+// リマインダー用の日時を解決
+function resolveReminderDate(dateStr, timeStr) {
+  const today = new Date();
+  let target;
+
+  switch (dateStr?.toLowerCase()) {
+    case 'tomorrow': case '明日':
+      target = new Date(today.getTime() + 86400000);
+      break;
+    case 'day_after_tomorrow': case '明後日':
+      target = new Date(today.getTime() + 86400000 * 2);
+      break;
+    default:
+      target = today;
+  }
+
+  if (timeStr) {
+    const [h, m] = timeStr.split(':').map(Number);
+    target.setHours(h, m, 0, 0);
+  } else {
+    // デフォルトは1時間後
+    target = new Date(Date.now() + 3600000);
+  }
+
+  return target;
+}
+
 async function executeIntent(intent, rawText) {
   let response;
 
@@ -486,6 +573,7 @@ async function executeIntent(intent, rawText) {
 ・タスク作成「〇〇をタスクに追加」
 ・タスク確認「タスク一覧」
 ・リマインダー「〇〇をリマインド」
+・領収書登録「領収書」「レシート」
 
 【その他】※ログイン不要
 ・天気「東京の天気」「明日の天気」
@@ -495,6 +583,11 @@ async function executeIntent(intent, rawText) {
 ・ニュース「ニュース」「スポーツニュース」
 ・タイマー「3分タイマー」
 ・メモ「〇〇をメモ」「メモ一覧」`;
+        return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
+
+      case IntentType.CAPTURE_RECEIPT:
+        // カメラ起動して領収書撮影 → Google Driveにアップロード
+        response = await captureAndUploadReceipt();
         return { type: intent.type, rawText, response, success: true, timestamp: new Date().toISOString() };
     }
 
@@ -546,11 +639,17 @@ async function executeIntent(intent, rawText) {
         break;
 
       case IntentType.SET_REMINDER:
-        response = await Tasks.createTask(
-          intent.params.title || rawText,
-          'リマインダー',
-          intent.params.date || null
-        );
+        // Due設定がONならDueアプリを使用
+        if (Due.isEnabled()) {
+          const reminderDate = resolveReminderDate(intent.params.date, intent.params.time);
+          response = Due.createReminder(intent.params.title || rawText, reminderDate);
+        } else {
+          response = await Tasks.createTask(
+            intent.params.title || rawText,
+            'リマインダー',
+            intent.params.date || null
+          );
+        }
         break;
 
       default:
@@ -684,6 +783,20 @@ function initSettings() {
   dom.inputWakeword.value = localStorage.getItem('wake_word') || 'ヘイエージェント';
   dom.inputWakeword.addEventListener('change', () => {
     speech.setWakeWord(dom.inputWakeword.value);
+  });
+
+  // Due連携トグル
+  dom.toggleDue.checked = Due.isEnabled();
+  dom.toggleDue.addEventListener('change', () => {
+    Due.setEnabled(dom.toggleDue.checked);
+  });
+
+  // Google Drive フォルダID
+  dom.inputDriveFolder.value = localStorage.getItem('drive_receipt_folder') || '';
+  dom.btnSaveDriveFolder.addEventListener('click', () => {
+    const folderId = dom.inputDriveFolder.value.trim();
+    localStorage.setItem('drive_receipt_folder', folderId);
+    alert('Google Driveフォルダを保存しました');
   });
 
   // OpenAI キー
