@@ -163,9 +163,36 @@ function initHome() {
   speech.onStateChange = (newState) => {
     setAgentState(newState);
   };
+
+  // クイックアクションボタン
+  $$('.quick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      haptic();
+      const cmd = btn.dataset.cmd;
+      if (cmd) processCommand(cmd);
+    });
+  });
+}
+
+// ============================================
+// ハプティクスフィードバック
+// ============================================
+
+function haptic(style = 'light') {
+  if ('vibrate' in navigator) {
+    const patterns = {
+      light: [10],
+      medium: [20],
+      heavy: [30],
+      success: [10, 50, 10],
+      error: [50, 30, 50],
+    };
+    navigator.vibrate(patterns[style] || patterns.light);
+  }
 }
 
 function toggleListening() {
+  haptic('medium');
   if (isListening) {
     speech.stop();
     isListening = false;
