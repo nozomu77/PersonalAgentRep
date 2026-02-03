@@ -866,14 +866,36 @@ function renderHistory() {
     respP.className = 'history-response';
     respP.textContent = item.response;
 
-    const timeP = document.createElement('p');
+    const footer = document.createElement('div');
+    footer.className = 'history-footer';
+
+    const timeP = document.createElement('span');
     timeP.className = 'history-time';
     timeP.textContent = time;
+
+    const rerunBtn = document.createElement('button');
+    rerunBtn.className = 'history-rerun';
+    rerunBtn.textContent = '🔄 再実行';
+    rerunBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      haptic('medium');
+      // ホームタブに切り替え
+      $$('.tab').forEach(t => t.classList.remove('active'));
+      $('.tab[data-tab="home"]').classList.add('active');
+      $$('.page').forEach(p => p.classList.remove('active'));
+      $('#page-home').classList.add('active');
+      state.currentPage = 'home';
+      // コマンド再実行
+      processCommand(item.rawText);
+    });
+
+    footer.appendChild(timeP);
+    footer.appendChild(rerunBtn);
 
     div.appendChild(header);
     div.appendChild(rawP);
     div.appendChild(respP);
-    div.appendChild(timeP);
+    div.appendChild(footer);
     dom.historyList.appendChild(div);
   });
 }

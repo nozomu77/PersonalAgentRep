@@ -623,10 +623,39 @@ body.state-listening #transcription {
   white-space: pre-wrap;
 }
 
+.history-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 .history-time {
   font-size: 11px;
   color: var(--text-muted);
-  margin-top: 8px;
+}
+
+.history-rerun {
+  padding: 6px 12px;
+  background: var(--bg-glass);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  color: var(--accent-light);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.history-rerun:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: var(--accent);
+}
+
+.history-rerun:active {
+  transform: scale(0.95);
 }
 
 /* ---- Settings Page ---- */
