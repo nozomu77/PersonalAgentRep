@@ -577,7 +577,7 @@ function setAgentState(newState) {
   // アイコン更新
   const icons = {
     idle: '🎤', listening: '🎤', activated: '👂',
-    processing: '🧠', responding: '💬',
+    processing: '✨', responding: '💬',
   };
   dom.agentIcon.textContent = icons[newState] || '🎤';
 
