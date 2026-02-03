@@ -25,9 +25,9 @@ let onAuthChange = null;
 export function initAuth(callback) {
   onAuthChange = callback;
 
-  // 保存済みトークンを復元 (sessionStorage: タブ閉じたら消える)
-  const saved = sessionStorage.getItem('gauth_token');
-  const savedExpiry = sessionStorage.getItem('gauth_expiry');
+  // 保存済みトークンを復元 (localStorage: ブラウザを閉じても保持)
+  const saved = localStorage.getItem('gauth_token');
+  const savedExpiry = localStorage.getItem('gauth_expiry');
   if (saved && savedExpiry && Date.now() < parseInt(savedExpiry)) {
     accessToken = saved;
     tokenExpiry = parseInt(savedExpiry);
@@ -77,8 +77,8 @@ export function signOut() {
   }
   accessToken = null;
   tokenExpiry = null;
-  sessionStorage.removeItem('gauth_token');
-  sessionStorage.removeItem('gauth_expiry');
+  localStorage.removeItem('gauth_token');
+  localStorage.removeItem('gauth_expiry');
   onAuthChange?.(false);
 }
 
@@ -117,8 +117,8 @@ function handleTokenResponse(response) {
   // トークンの有効期限（通常1時間）
   tokenExpiry = Date.now() + (response.expires_in || 3600) * 1000;
 
-  sessionStorage.setItem('gauth_token', accessToken);
-  sessionStorage.setItem('gauth_expiry', tokenExpiry.toString());
+  localStorage.setItem('gauth_token', accessToken);
+  localStorage.setItem('gauth_expiry', tokenExpiry.toString());
 
   onAuthChange?.(true);
 }
