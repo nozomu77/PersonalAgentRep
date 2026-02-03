@@ -386,6 +386,12 @@ async function createReminder() {
     return;
   }
 
+  // Due連携チェック
+  if (!Due.isEnabled()) {
+    dom.reminderVoiceStatus.textContent = '⚠️ 設定でDue連携をONにしてください';
+    return;
+  }
+
   closeReminderDialog();
 
   // リマインダー実行
@@ -393,16 +399,7 @@ async function createReminder() {
   showProgress('execute');
 
   try {
-    let response;
-    if (Due.isEnabled()) {
-      response = Due.createReminder(title, targetDate);
-    } else {
-      // Google Tasksにリマインダーとして追加
-      if (!isAuthenticated()) {
-        throw new Error('Googleアカウントにログインしてください');
-      }
-      response = await Tasks.createTask(title, 'リマインダー', targetDate.toISOString().split('T')[0]);
-    }
+    const response = Due.createReminder(title, targetDate);
 
     setProgressDone('execute');
     showProgress('done');
@@ -857,17 +854,13 @@ async function executeIntent(intent, rawText) {
         break;
 
       case IntentType.SET_REMINDER:
-        // Due設定がONならDueアプリを使用
-        if (Due.isEnabled()) {
-          const reminderDate = resolveReminderDate(intent.params.date, intent.params.time);
-          response = Due.createReminder(intent.params.title || rawText, reminderDate);
-        } else {
-          response = await Tasks.createTask(
-            intent.params.title || rawText,
-            'リマインダー',
-            intent.params.date || null
-          );
+        // Due連携のみ
+        if (!Due.isEnabled()) {
+          response = '設定でDue連携をONにしてください';
+          return { type: intent.type, rawText, response, success: false, timestamp: new Date().toISOString() };
         }
+        const reminderDate = resolveReminderDate(intent.params.date, intent.params.time);
+        response = Due.createReminder(intent.params.title || rawText, reminderDate);
         break;
 
       default:

@@ -278,11 +278,12 @@ export const Due = {
     params.set('title', title);
 
     if (dateTime) {
-      // ISO 8601形式: 2024-01-15T09:00:00
+      // ローカル時間でISO 8601形式: 2024-01-15T09:00:00
       const d = dateTime instanceof Date ? dateTime : new Date(dateTime);
       if (!isNaN(d.getTime())) {
-        const iso = d.toISOString().slice(0, 19); // 秒まで
-        params.set('duedate', iso);
+        const pad = n => n.toString().padStart(2, '0');
+        const localISO = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        params.set('duedate', localISO);
       }
     }
 
@@ -291,7 +292,8 @@ export const Due = {
     // Dueアプリを開く
     window.location.href = url;
 
-    return `Dueアプリでリマインダーを作成します: ${title}`;
+    const timeStr = dateTime ? ` (${dateTime.toLocaleString('ja-JP')})` : '';
+    return `Dueアプリでリマインダーを作成します: ${title}${timeStr}`;
   },
 
   // Due使用設定を確認
