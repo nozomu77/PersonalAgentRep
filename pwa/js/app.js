@@ -590,6 +590,9 @@ async function processCommand(text) {
 }
 
 function resetToIdle() {
+  if (isListening) {
+    speech.stop();
+  }
   isListening = false;
   dom.btnMic.classList.remove('recording');
   dom.micIcon.textContent = '🎙️';
